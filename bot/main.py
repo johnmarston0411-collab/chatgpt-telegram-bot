@@ -20,7 +20,7 @@ def main():
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
     # Check if the required environment variables are set
-    required_values = ['TELEGRAM_BOT_TOKEN', 'OPENAI_API_KEY']
+    required_values = ['TELEGRAM_BOT_TOKEN', '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']
     missing_values = [value for value in required_values if os.environ.get(value) is None]
     if len(missing_values) > 0:
         logging.error(f'The following environment values are missing in your .env: {", ".join(missing_values)}')
