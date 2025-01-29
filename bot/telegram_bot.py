@@ -986,24 +986,24 @@ class ChatGPTTelegramBot:
                                           text=f"{query}\n\n_{answer_tr}:_\n{localized_answer} {str(e)}",
                                           is_inline=True)
 
-    async def check_allowed_and_within_budget(self, update: Update, context: ContextTypes.DEFAULT_TYPE, is_inline=False) -> bool:
-        # Проверка chat_id
-        current_chat_id = str(update.effective_chat.id) if not is_inline else str(update.inline_query.chat_instance)
-        allowed_chat_id = str(self.config.get("CHAT_ID", ""))
-    
-        if allowed_chat_id and current_chat_id != allowed_chat_id:
-            logging.warning(f"Запрос из запрещенного чата: {current_chat_id}")
-            await self.send_disallowed_message(update, context, is_inline)
-            return False
-        user_id = update.inline_query.from_user.id if is_inline else update.message.from_user.id
+    async def check_allowed_and_within_budget(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                                              is_inline=False) -> bool:
+        """
+        Checks if the user is allowed to use the bot and if they are within their budget
+        :param update: Telegram update object
+        :param context: Telegram context object
+        :param is_inline: Boolean flag for inline queries
+        :return: Boolean indicating if the user is allowed to use the bot
+        """
         name = update.inline_query.from_user.name if is_inline else update.message.from_user.name
+        user_id = update.inline_query.from_user.id if is_inline else update.message.from_user.id
 
         if not await is_allowed(self.config, update, context, is_inline=is_inline):
-            logging.warning(f'Пользователь {name} (id: {user_id}) не имеет доступа')
+            logging.warning(f'User {name} (id: {user_id}) is not allowed to use the bot')
             await self.send_disallowed_message(update, context, is_inline)
             return False
         if not is_within_budget(self.config, self.usage, update, is_inline=is_inline):
-            logging.warning(f'Пользователь {name} (id: {user_id}) превысил лимит')
+            logging.warning(f'User {name} (id: {user_id}) reached their usage limit')
             await self.send_budget_reached_message(update, context, is_inline)
             return False
 

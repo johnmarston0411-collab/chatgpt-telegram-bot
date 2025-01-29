@@ -9,8 +9,6 @@ ADMIN_USER_IDS=269949384
 
 # Comma separated list of telegram user IDs, or * to allow all
 ALLOWED_TELEGRAM_USER_IDS=*
-CHAT_ID=-1001455291970
-
 
 
 # Optional configuration, refer to the README for more details
