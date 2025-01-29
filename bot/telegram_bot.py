@@ -987,19 +987,14 @@ class ChatGPTTelegramBot:
                                           is_inline=True)
 
     async def check_allowed_and_within_budget(self, update: Update, context: ContextTypes.DEFAULT_TYPE, is_inline=False) -> bool:
-        """
-        Checks if the user is allowed to use the bot and if they are within their budget
-        :param update: Telegram update object
-        :param context: Telegram context object
-        :param is_inline: Boolean flag for inline queries
-        :return: Boolean indicating if the user is allowed to use the bot
-        """
-        #тут
-        chat_id = update.effective_chat.id if not is_inline else update.inline_query.chat_instance
-        if str(chat_id) != str(self.config['CHAT_ID']):
-            logging.warning(f"Запрос из запрещенного чата: {chat_id}")
+        # Проверка chat_id
+        current_chat_id = str(update.effective_chat.id) if not is_inline else str(update.inline_query.chat_instance)
+        allowed_chat_id = str(self.config.get("CHAT_ID", ""))
+    
+        if allowed_chat_id and current_chat_id != allowed_chat_id:
+            logging.warning(f"Запрос из запрещенного чата: {current_chat_id}")
+            await self.send_disallowed_message(update, context, is_inline)
             return False
-
         user_id = update.inline_query.from_user.id if is_inline else update.message.from_user.id
         name = update.inline_query.from_user.name if is_inline else update.message.from_user.name
 

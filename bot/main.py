@@ -74,6 +74,7 @@ def main():
                         'Please use GUEST_BUDGET with BUDGET_PERIOD instead.')
 
     telegram_config = {
+        'allowed_chat_id': os.environ.get('CHAT_ID', None),
         'token': os.environ['TELEGRAM_BOT_TOKEN'],
         'admin_user_ids': os.environ.get('ADMIN_USER_IDS', '-'),
         'allowed_user_ids': os.environ.get('ALLOWED_TELEGRAM_USER_IDS', '*'),
