@@ -1,14 +1,22 @@
-FROM python:3.9-alpine
+version: '3'
+services:
+  chatgpt-telegram-bot:
+    build: .
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    #бота
+    command: ["python", "bot/main.py"]
 
-ENV PYTHONFAULTHANDLER=1 \
-     PYTHONUNBUFFERED=1 \
-     PYTHONDONTWRITEBYTECODE=1 \
-     PIP_DISABLE_PIP_VERSION_CHECK=on
-
-RUN apk --no-cache add ffmpeg
-
-WORKDIR /app
-COPY . .
-RUN pip install -r requirements.txt --no-cache-dir
-
-CMD ["python", "bot/main.py"]
+  webhook-listener:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/app
+    environment:
+      - SECRET_KEY=your_secret_key_here
+    restart: unless-stopped
+    #вебхука
+    command: ["python", "webhook_listener.py"]
