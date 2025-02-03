@@ -28,6 +28,17 @@ def message_text(message: Message) -> str:
     return message_txt if len(message_txt) > 0 else ''
 
 
+def message_caption(message: Message) -> str:
+    """
+    Returns the caption of attached image.
+    """
+    message_cap = message.caption
+    if message_cap is None:
+        return ''
+
+    return message_cap if len(message_cap) > 0 else ''
+
+
 async def is_user_in_group(update: Update, context: CallbackContext, user_id: int) -> bool:
     """
     Checks if user_id is a member of the group
