@@ -20,7 +20,7 @@ from plugin_manager import PluginManager
 # Models can be found here: https://platform.openai.com/docs/models/overview
 GPT_3_MODELS = ("gpt-3.5-turbo", "gpt-3.5-turbo-0301", "gpt-3.5-turbo-0613")
 GPT_3_16K_MODELS = ("gpt-3.5-turbo-16k", "gpt-3.5-turbo-16k-0613")
-GPT_4_MODELS = ("gpt-4", "gpt-4-0314", "gpt-4-0613")
+GPT_4_MODELS = ("gpt-4", "gpt-4-0314", "gpt-4-0613", "gpt-4o-2024-08-06")
 GPT_4_32K_MODELS = ("gpt-4-32k", "gpt-4-32k-0314", "gpt-4-32k-0613")
 GPT_ALL_MODELS = GPT_3_MODELS + GPT_3_16K_MODELS + GPT_4_MODELS + GPT_4_32K_MODELS
 
@@ -335,6 +335,34 @@ class OpenAIHelper:
         except Exception as e:
             raise Exception(f"⚠️ _{localized_text('error', bot_language)}._ ⚠️\n{str(e)}") from e
 
+    async def analyze_image(self, prompt: str, image_path: str) -> str:
+        # Create chat completion
+        try:
+            chat_completion = await openai.ChatCompletion.acreate(
+                model='gpt-4o-2024-08-06',
+                max_tokens=self.config['max_tokens'],
+                messages=[
+                    {
+                        'role': 'user',
+                        'content': [
+                            {
+                                'type': 'text',
+                                'text': prompt
+                            },
+                            {
+                                'type': 'image_url',
+                                'image_url': {
+                                    'url': image_path
+                                }
+                            }
+                        ]
+                    }
+                ]
+            )
+            return chat_completion.choices[0].message.content
+        except Exception as e:
+            logging.error(f'Image Analysis error: {e}')
+
     async def transcribe(self, filename):
         """
         Transcribes the audio file using the Whisper model.
@@ -426,7 +454,7 @@ class OpenAIHelper:
         try:
             encoding = tiktoken.encoding_for_model(model)
         except KeyError:
-            encoding = tiktoken.get_encoding("gpt-3.5-turbo")
+            encoding = tiktoken.get_encoding("gpt-4")
 
         if model in GPT_3_MODELS + GPT_3_16K_MODELS:
             tokens_per_message = 4  # every message follows <|start|>{role/name}\n{content}<|end|>\n

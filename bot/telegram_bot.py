@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import base64
 
 from uuid import uuid4
 from telegram import BotCommandScopeAllGroupChats, Update, constants
@@ -17,7 +18,7 @@ from pydub import AudioSegment
 from utils import is_group_chat, get_thread_id, message_text, wrap_with_indicator, split_into_chunks, \
     edit_message_with_retry, get_stream_cutoff_values, is_allowed, get_remaining_budget, is_admin, is_within_budget, \
     get_reply_to_message_id, add_chat_request_to_usage_tracker, error_handler, is_direct_result, handle_direct_result, \
-    cleanup_intermediate_files
+    cleanup_intermediate_files, message_caption
 from openai_helper import OpenAIHelper, localized_text
 from usage_tracker import UsageTracker
 
@@ -204,6 +205,44 @@ class ChatGPTTelegramBot:
         await update.effective_message.reply_text(
             message_thread_id=get_thread_id(update),
             text=localized_text('reset_done', self.config['bot_language'])
+        )
+
+    async def image_analyze(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Analyze image for the given prompt using DALL·E APIs
+        """
+        prompt = message_caption(update.message)
+
+        if prompt == '':
+            prompt = localized_text('image_analysis_prompt', self.config['bot_language'])
+
+        photo = update.message.photo
+        if photo:
+            photo_file = await context.bot.get_file(update.message.photo[-1].file_id)
+            logging.info(f'Prompt: {prompt}')
+            logging.info(f'Image: {type(photo_file)}')
+            logging.info(f'Path: {photo_file.file_path}')
+            logging.info(f'Size: {photo_file.file_size}')
+        elif update.message.document:
+            photo_file = await context.bot.get_file(update.message.document.file_id)
+            logging.info(f'Prompt: {prompt}')
+            logging.info(f'Document: {type(photo_file)}')
+            logging.info(f'Path: {photo_file.file_path}')
+            logging.info(f'Size: {photo_file.file_size}')
+        else:
+            await update.effective_message.reply_text(
+                message_thread_id=get_thread_id(update),
+                text=localized_text('image_analysis', self.config['bot_language'])
+            )
+            return
+
+        analysis_result = await self.openai.analyze_image(prompt, photo_file.file_path)
+
+        await update.effective_message.reply_text(
+            message_thread_id=get_thread_id(update),
+            reply_to_message_id=get_reply_to_message_id(self.config, update),
+            text=analysis_result,
+            parse_mode=constants.ParseMode.MARKDOWN
         )
 
     async def image(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -796,6 +835,7 @@ class ChatGPTTelegramBot:
             filters.AUDIO | filters.VOICE | filters.Document.AUDIO |
             filters.VIDEO | filters.VIDEO_NOTE | filters.Document.VIDEO,
             self.transcribe))
+        application.add_handler(MessageHandler(filters.PHOTO, self.image_analyze))
         application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self.prompt))
         application.add_handler(InlineQueryHandler(self.inline_query, chat_types=[
             constants.ChatType.GROUP, constants.ChatType.SUPERGROUP, constants.ChatType.PRIVATE
