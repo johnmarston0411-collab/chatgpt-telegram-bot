@@ -15,6 +15,7 @@ from plugins.worldtimeapi import WorldTimeApiPlugin
 from plugins.whois_ import WhoisPlugin
 from plugins.webshot import WebshotPlugin
 from plugins.iplocation import IpLocationPlugin
+from plugins.telegram_moderator import TelegramModerator
 
 
 class PluginManager:
@@ -40,6 +41,7 @@ class PluginManager:
             'whois': WhoisPlugin,
             'webshot': WebshotPlugin,
             'iplocation': IpLocationPlugin,
+            'telegram_moderator': TelegramModerator,
         }
         self.plugins = [plugin_mapping[plugin]() for plugin in enabled_plugins if plugin in plugin_mapping]
 

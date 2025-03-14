@@ -36,6 +36,7 @@ load_dotenv()
 FORWARD_KEYWORD = os.getenv("FORWARD_KEYWORD",'forward it :')
 SEND_KEYWORD = os.getenv("SEND_KEYWORD",'send it :')
 CHANNEL_ID = os.getenv("CHANNEL_ID",'None')
+
 class ChatGPTTelegramBot:
     """
     Class representing a ChatGPT Telegram Bot.
