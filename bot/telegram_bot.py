@@ -965,22 +965,39 @@ class ChatGPTTelegramBot:
 
         if is_group_chat(update):
             if prompt.lower().startswith(FORWARD_KEYWORD.lower()):
-                await context.bot.forward_message(
-                    chat_id=CHANNEL_ID,
-                    from_chat_id=update.message.chat.id,
-                    message_id=update.message.message_id
-                )
-                logging.info(f"Forwarded message to the channel {CHANNEL_ID}: %s", prompt)
-                prompt=("Tell the user their massage has been forwarded to their channel sucessfully.")
-                # get the openai system-response
+                # Extract the part of the prompt after the keyword and strip spaces
+                user_input_after_keyword = prompt[len(FORWARD_KEYWORD):].strip()
+                # If there is no content after the keyword (i.e., only the keyword was entered)
+                if not user_input_after_keyword:
+                    await context.bot.forward_message(
+                        chat_id=CHANNEL_ID,
+                        from_chat_id=update.message.chat.id,
+                        message_id=update.message.message_id - 1
+                    )
+                else :
+                    await context.bot.forward_message(
+                        chat_id=CHANNEL_ID,
+                        from_chat_id=update.message.chat.id,
+                        message_id=update.message.message_id
+                    )
+                logging.info(f"Forwarded message to the channel {CHANNEL_ID}: %s", update.effective_message.reply_to_message.text)
+                # Respond to the user that the message has been forwarded
+                prompt = "Tell the user their message has been forwarded to their channel successfully."
+                # Get the OpenAI system-response
                 await self.process_system_chat_response(update, context, prompt, chat_id)
+
 
 
             # Check if the message starts with the sending keyword.
             elif prompt.lower().startswith(SEND_KEYWORD.lower()):
-                sent_text = prompt[len(SEND_KEYWORD):].strip()
-                await context.bot.send_message(chat_id=CHANNEL_ID, text=sent_text)
-                logging.info(f"Sent message to the channel {CHANNEL_ID}: %s", sent_text)
+                # Extract the part of the prompt after the keyword and strip spaces
+                user_input_after_keyword = prompt[len(FORWARD_KEYWORD):].strip()
+                # If there is no content after the keyword (i.e., only the keyword was entered) send the replied message
+                if not user_input_after_keyword:
+                    await context.bot.send_message(chat_id=CHANNEL_ID, text=update.effective_message.reply_to_message.text)
+                else:
+                    await context.bot.send_message(chat_id=CHANNEL_ID, text=user_input_after_keyword)
+                logging.info(f"Sent message to the channel {CHANNEL_ID}: %s", user_input_after_keyword)
                 prompt=("Tell the user their massage has been sent to their channel sucessfully.")
                 # get the openai system-response
                 await self.process_system_chat_response(update, context, prompt, chat_id)
