@@ -10,7 +10,7 @@ from io import BytesIO
 import base64
 
 from uuid import uuid4
-from telegram import BotCommandScopeAllGroupChats, Update, constants
+from telegram import BotCommandScopeAllGroupChats, Update, constants , InputMediaPhoto
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, InlineQueryResultArticle
 from telegram import InputTextMessageContent, BotCommand
 from telegram.error import RetryAfter, TimedOut, BadRequest
@@ -680,7 +680,7 @@ class ChatGPTTelegramBot:
 
         await wrap_with_indicator(update, context, _execute, constants.ChatAction.TYPING)
 
-    async def process_openai_response(self, update, context, prompt, chat_id):
+    async def process_openai_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE, prompt, chat_id):
         total_tokens = 0
 
         try:
@@ -813,7 +813,7 @@ class ChatGPTTelegramBot:
                 parse_mode=constants.ParseMode.MARKDOWN
             )
 
-    async def process_system_chat_response(self, update, context, prompt, chat_id):
+    async def process_system_chat_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE, prompt, chat_id):
         total_tokens = 0
 
         try:
@@ -946,6 +946,52 @@ class ChatGPTTelegramBot:
                 parse_mode=constants.ParseMode.MARKDOWN
             )
 
+    async def send_replied_message(self , update: Update, context: ContextTypes.DEFAULT_TYPE):
+        # Get the replied message
+        replied_message = update.effective_message.reply_to_message
+        
+        # Extract text from the replied message
+        text = replied_message.text if replied_message.text else ""
+        
+        # Check if the replied message contains media
+        if replied_message.photo:
+            # If it's a photo, send the photo along with the text
+            await context.bot.send_media_group(
+                chat_id=CHANNEL_ID,
+                media=[InputMediaPhoto(media=replied_message.photo[-1].file_id, caption=text)]
+            )
+        elif replied_message.audio:
+            # If it's an audio file, send the audio along with the text
+            await context.bot.send_audio(
+                chat_id=CHANNEL_ID,
+                audio=replied_message.audio.file_id,
+                caption=text
+            )
+        elif replied_message.document:
+            # If it's a document, send the document along with the text
+            await context.bot.send_document(
+                chat_id=CHANNEL_ID,
+                document=replied_message.document.file_id,
+                caption=text
+            )
+        elif replied_message.video:
+            # If it's a video, send the video along with the text
+            await context.bot.send_video(
+                chat_id=CHANNEL_ID,
+                video=replied_message.video.file_id,
+                caption=text
+            )
+        elif replied_message.voice:
+            # If it's a voice message, send the voice message along with the text
+            await context.bot.send_voice(
+                chat_id=CHANNEL_ID,
+                voice=replied_message.voice.file_id,
+                caption=text
+            )
+        else:
+            # If there's no media, just send the text
+            await context.bot.send_message(chat_id=CHANNEL_ID, text=text)
+        
 
     async def prompt(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -973,7 +1019,7 @@ class ChatGPTTelegramBot:
                     await context.bot.forward_message(
                         chat_id=CHANNEL_ID,
                         from_chat_id=update.message.chat.id,
-                        message_id=update.message.message_id - 1
+                        message_id=update.effective_message.reply_to_message.message_id
                     )
                 else :
                     await context.bot.forward_message(
@@ -987,15 +1033,16 @@ class ChatGPTTelegramBot:
                 # Get the OpenAI system-response
                 await self.process_system_chat_response(update, context, prompt, chat_id)
 
-
-
             # Check if the message starts with the sending keyword.
             elif prompt.lower().startswith(SEND_KEYWORD.lower()):
                 # Extract the part of the prompt after the keyword and strip spaces
                 user_input_after_keyword = prompt[len(FORWARD_KEYWORD):].strip()
+                # Get the replied message
+                replied_message = update.effective_message.reply_to_message
                 # If there is no content after the keyword (i.e., only the keyword was entered) send the replied message
                 if not user_input_after_keyword:
-                    await context.bot.send_message(chat_id=CHANNEL_ID, text=update.effective_message.reply_to_message.text)
+                    logging.info(f"the sent message is : {update.effective_message.reply_to_message}")
+                    await self.send_replied_message(update, context)
                 else:
                     await context.bot.send_message(chat_id=CHANNEL_ID, text=user_input_after_keyword)
                 logging.info(f"Sent message to the channel {CHANNEL_ID}: %s", user_input_after_keyword)
