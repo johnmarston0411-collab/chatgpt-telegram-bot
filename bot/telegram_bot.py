@@ -992,6 +992,48 @@ class ChatGPTTelegramBot:
             # If there's no media, just send the text
             await context.bot.send_message(chat_id=CHANNEL_ID, text=text)
         
+    async def handle_channel_commands(self, update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, chat_id: int):
+        """
+        Handles channel-related commands: forwarding or sending messages based on keywords.
+        """
+        if prompt.lower().startswith(FORWARD_KEYWORD.lower()):
+            # Extract the part of the prompt after the forward keyword and strip spaces.
+            user_input_after_keyword = prompt[len(FORWARD_KEYWORD):].strip()
+            # If no extra content is provided, forward the replied-to message.
+            if not user_input_after_keyword:
+                await context.bot.forward_message(
+                    chat_id=CHANNEL_ID,
+                    from_chat_id=update.message.chat.id,
+                    message_id=update.effective_message.reply_to_message.message_id
+                )
+            else:
+                await context.bot.forward_message(
+                    chat_id=CHANNEL_ID,
+                    from_chat_id=update.message.chat.id,
+                    message_id=update.message.message_id
+                )
+            logging.info(
+                f"Forwarded message to the channel {CHANNEL_ID}: %s", 
+                update.effective_message.reply_to_message.text
+            )
+            forward_response = "-ONLY- Tell the user their message has been forwarded to their channel successfully."
+            await self.process_system_chat_response(update, context, forward_response, chat_id)
+
+        elif prompt.lower().startswith(SEND_KEYWORD.lower()):
+            # Extract the part of the prompt after the send keyword and strip spaces.
+            # Note: Changed to use SEND_KEYWORD for correct slicing.
+            user_input_after_keyword = prompt[len(SEND_KEYWORD):].strip()
+            # Get the replied message.
+            replied_message = update.effective_message.reply_to_message
+            # If no extra content is provided, send the replied-to message.
+            if not user_input_after_keyword:
+                logging.info(f"The sent message is: {replied_message}")
+                await self.send_replied_message(update, context)
+            else:
+                await context.bot.send_message(chat_id=CHANNEL_ID, text=user_input_after_keyword)
+            logging.info(f"Sent message to the channel {CHANNEL_ID}: %s", user_input_after_keyword)
+            send_response = "-ONLY- Tell the user their message has been sent to their channel successfully."
+            await self.process_system_chat_response(update, context, send_response, chat_id)
 
     async def prompt(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -1011,56 +1053,20 @@ class ChatGPTTelegramBot:
         self.last_message[chat_id] = prompt
 
         if is_group_chat(update):
-            if prompt.lower().startswith(FORWARD_KEYWORD.lower()):
-                # Extract the part of the prompt after the keyword and strip spaces
-                user_input_after_keyword = prompt[len(FORWARD_KEYWORD):].strip()
-                # If there is no content after the keyword (i.e., only the keyword was entered)
-                if not user_input_after_keyword:
-                    await context.bot.forward_message(
-                        chat_id=CHANNEL_ID,
-                        from_chat_id=update.message.chat.id,
-                        message_id=update.effective_message.reply_to_message.message_id
-                    )
-                else :
-                    await context.bot.forward_message(
-                        chat_id=CHANNEL_ID,
-                        from_chat_id=update.message.chat.id,
-                        message_id=update.message.message_id
-                    )
-                logging.info(f"Forwarded message to the channel {CHANNEL_ID}: %s", update.effective_message.reply_to_message.text)
-                # Respond to the user that the message has been forwarded
-                prompt = "Tell the user their message has been forwarded to their channel successfully."
-                # Get the OpenAI system-response
-                await self.process_system_chat_response(update, context, prompt, chat_id)
-
-            # Check if the message starts with the sending keyword.
-            elif prompt.lower().startswith(SEND_KEYWORD.lower()):
-                # Extract the part of the prompt after the keyword and strip spaces
-                user_input_after_keyword = prompt[len(FORWARD_KEYWORD):].strip()
-                # Get the replied message
-                replied_message = update.effective_message.reply_to_message
-                # If there is no content after the keyword (i.e., only the keyword was entered) send the replied message
-                if not user_input_after_keyword:
-                    logging.info(f"the sent message is : {update.effective_message.reply_to_message}")
-                    await self.send_replied_message(update, context)
-                else:
-                    await context.bot.send_message(chat_id=CHANNEL_ID, text=user_input_after_keyword)
-                logging.info(f"Sent message to the channel {CHANNEL_ID}: %s", user_input_after_keyword)
-                prompt=("Tell the user their massage has been sent to their channel sucessfully.")
-                # get the openai system-response
-                await self.process_system_chat_response(update, context, prompt, chat_id)
-                
-
+            # Check if the prompt starts with either the forward or send keyword
+            if prompt.lower().startswith(FORWARD_KEYWORD.lower()) or prompt.lower().startswith(SEND_KEYWORD.lower()):
+                await self.handle_channel_commands(update, context, prompt, chat_id)
             else:
                 trigger_keyword = self.config['group_trigger_keyword']
 
                 if prompt.lower().startswith(trigger_keyword.lower()) or update.message.text.lower().startswith('/chat'):
                     if prompt.lower().startswith(trigger_keyword.lower()):
                         prompt = prompt[len(trigger_keyword):].strip()
+                        if prompt.lower().startswith(FORWARD_KEYWORD.lower()) or prompt.lower().startswith(SEND_KEYWORD.lower()):
+                            await self.handle_channel_commands(update, context, prompt, chat_id)
 
-                    if update.message.reply_to_message and \
-                            update.message.reply_to_message.text and \
-                            update.message.reply_to_message.from_user.id != context.bot.id:
+                    if (update.message.reply_to_message and update.message.reply_to_message.text and 
+                            update.message.reply_to_message.from_user.id != context.bot.id):
                         prompt = f'"{update.message.reply_to_message.text}" {prompt}'
                 else:
                     if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
@@ -1068,11 +1074,10 @@ class ChatGPTTelegramBot:
                     else:
                         logging.warning('Message does not start with trigger keyword, ignoring...')
                         return
-                # Call the newly extracted function
                 await self.process_openai_response(update, context, prompt, chat_id)
         else:
-            # Call the newly extracted function
             await self.process_openai_response(update, context, prompt, chat_id)
+
 
     async def inline_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """

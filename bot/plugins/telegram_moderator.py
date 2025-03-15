@@ -3,16 +3,16 @@ from dotenv import load_dotenv
 from typing import Dict, List
 from .plugin import Plugin
 
-from telegram import Bot
+from telegram import Bot, Update
 from telegram.error import TelegramError
 
 # Load environment variables from .env file.
 load_dotenv()
 
 # Configuration values from environment variables.
-BOT_TOKEN_MODERATOR = os.getenv("BOT_TOKEN_MODERATOR","")
-ALLOWED_TELEGRAM_USER_IDS = list(map(int, os.getenv("ALLOWED_TELEGRAM_USER_IDS", "").split(","))) if os.getenv("ALLOWED_TELEGRAM_USER_IDS") else []
-CHANNEL_ID = os.getenv("CHANNEL_ID","")
+BOT_TOKEN_MODERATOR = os.getenv("BOT_TOKEN_MODERATOR", "")
+CHANNEL_ID = os.getenv("CHANNEL_ID", "")
+GROUP_ID = os.getenv("GROUP_ID", "")  
 
 class TelegramModerator(Plugin):
     """
@@ -30,22 +30,22 @@ class TelegramModerator(Plugin):
             "description": (
                 "Handles a Telegram message. If the message starts with 'forward it :', the message is "
                 "forwarded to a designated channel. If it starts with 'send it :', the text is sent as a "
-                "new message to the channel. Otherwise, the message is processed via a simulated external bot."
+                "new message to the channel. If it starts with 'get recent', the bot retrieves recent messages."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["send"],
-                        "description": "The action to perform, 'send' a new message to the channel"
+                        "enum": ["send", "get_recent"],
+                        "description": "The action to perform, 'send' a new message to the channel or 'get_recent' to retrieve recent messages"
                     },
                     "message_text": {
                         "type": "string",
                         "description": "The full text of the Telegram message."
                     }
                 },
-                "required": ["action","message_text"]
+                "required": ["action"]
             }
         }]
 
@@ -57,45 +57,50 @@ class TelegramModerator(Plugin):
           - message_text: str
           - chat_id: int
           - message_id: int
-          - message_thread_id: int
+          - message_thread_id: int (optional; may be provided in the update)
           - from_user_id: int
         """
         # Basic configuration checks.
         if not BOT_TOKEN_MODERATOR:
-            error_msg = "BOT_TOKEN is missing from environment variables."
-            return {"error": error_msg}
+            return {"error": "BOT_TOKEN is missing from environment variables."}
 
         if not CHANNEL_ID:
-            error_msg = "CHANNEL_ID is missing from environment variables."
-            return {"error": error_msg}
+            return {"error": "CHANNEL_ID is missing from environment variables."}
+
+        if not GROUP_ID:
+            return {"error": "GROUP_ID is missing from environment variables."}
 
         # Unpack required parameters.
         action = kwargs.get("action")
         message_text = kwargs.get("message_text")
-        chat_id = kwargs.get("chat_id")
-        message_id = kwargs.get("message_id")
-        message_thread_id = kwargs.get("message_thread_id")
-        from_user_id = kwargs.get("from_user_id")
-
-        # Check if the sender is allowed.
-        # if from_user_id not in ALLOWED_TELEGRAM_USER_IDS:
-        #     return {"status": "ignored", "reason": "User not allowed"}
 
         # Initialize the Telegram Bot.
         bot = Bot(token=BOT_TOKEN_MODERATOR)
 
         try:
-            if action=="send":
+            if action == "send":
                 # Send a new message to the channel.
                 await bot.send_message(chat_id=CHANNEL_ID, text=message_text)
                 return {"status": "success", "action": "send", "details": message_text}
+
+            elif action == "get_recent":
+                # Retrieve pending updates from the bot.
+                updates = await bot.get_updates(offset=0, timeout=10)
+                messages = []
+                for idx, update in enumerate(updates, start=1):
+                    if update.message :
+                        text = update.message.text or "No text"
+                        thread_id = getattr(update.message, "message_thread_id", None)
+                        chat_id = update.message.chat.id
+                        messages.append(f"Text: {text}, Thread ID: {thread_id}, Chat ID: {chat_id}")
+                # Return the details of the last 10 messages.
+                result = "\n".join(messages[-10:])
+                return {"status": "success", "action": "get_recent", "details": result}
 
             else:
                 return {"status": "success", "action": "process", "details": "Invalid action provided"}
 
         except TelegramError as e:
-            error_msg = f"Telegram error: {e}"
-            return {"error": error_msg}
+            return {"error": f"Telegram error: {e}"}
         except Exception as ex:
-            error_msg = f"Unexpected error: {ex}"
-            return {"error": error_msg}
+            return {"error": f"Unexpected error: {ex}"}
