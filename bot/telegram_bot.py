@@ -66,6 +66,9 @@ class ChatGPTTelegramBot:
 
         self.group_commands = [BotCommand(
             command='chat', description=localized_text('chat_description', bot_language)
+        ),
+        BotCommand(
+            command='moderate', description=localized_text('moderate_description', bot_language)
         )] + self.commands
         self.disallowed_message = localized_text('disallowed', bot_language)
         self.budget_limit_message = localized_text('budget_limit', bot_language)
@@ -503,9 +506,9 @@ class ChatGPTTelegramBot:
                 logging.info('Vision coming from group chat, ignoring...')
                 return
             else:
-                trigger_keyword = self.config['group_trigger_keyword']
-                if (prompt is None and trigger_keyword != '') or \
-                   (prompt is not None and not prompt.lower().startswith(trigger_keyword.lower())):
+                gp_trigger_keyword = self.config['group_trigger_keyword']
+                if (prompt is None and gp_trigger_keyword != '') or \
+                   (prompt is not None and not prompt.lower().startswith(gp_trigger_keyword.lower())):
                     logging.info('Vision coming from group chat with wrong keyword, ignoring...')
                     return
         
@@ -1034,7 +1037,7 @@ class ChatGPTTelegramBot:
             logging.info(f"Sent message to the channel {CHANNEL_ID}: %s", user_input_after_keyword)
             send_response = "-ONLY- Tell the user their message has been sent to their channel successfully."
             await self.process_system_chat_response(update, context, send_response, chat_id)
-
+        return
     async def prompt(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
         React to incoming messages and respond accordingly.
@@ -1057,17 +1060,38 @@ class ChatGPTTelegramBot:
             if prompt.lower().startswith(FORWARD_KEYWORD.lower()) or prompt.lower().startswith(SEND_KEYWORD.lower()):
                 await self.handle_channel_commands(update, context, prompt, chat_id)
             else:
-                trigger_keyword = self.config['group_trigger_keyword']
-
-                if prompt.lower().startswith(trigger_keyword.lower()) or update.message.text.lower().startswith('/chat'):
-                    if prompt.lower().startswith(trigger_keyword.lower()):
-                        prompt = prompt[len(trigger_keyword):].strip()
+                gp_trigger_keyword = self.config['group_trigger_keyword']
+                mod_trigger_keyword = self.config['mod_trigger_keyword']
+                if prompt.lower().startswith(gp_trigger_keyword.lower()) or update.message.text.lower().startswith('/chat'):
+                    if prompt.lower().startswith(gp_trigger_keyword.lower()):
+                        prompt = prompt[len(gp_trigger_keyword):].strip()
                         if prompt.lower().startswith(FORWARD_KEYWORD.lower()) or prompt.lower().startswith(SEND_KEYWORD.lower()):
                             await self.handle_channel_commands(update, context, prompt, chat_id)
+                            
 
                     if (update.message.reply_to_message and update.message.reply_to_message.text and 
                             update.message.reply_to_message.from_user.id != context.bot.id):
                         prompt = f'"{update.message.reply_to_message.text}" {prompt}'
+                elif prompt.lower().startswith(mod_trigger_keyword.lower()) or update.message.text.lower().startswith('/moderate'):
+                    logging.info(f"User requested for Moderation for group with message_thread_id:{update.message.message_thread_id}")
+                    if prompt.lower().startswith(mod_trigger_keyword.lower()):
+                        prompt = prompt[len(mod_trigger_keyword):].strip()
+                        logging.info(f"With the prompt:{prompt}")
+                        if prompt.lower().startswith(FORWARD_KEYWORD.lower()) or prompt.lower().startswith(SEND_KEYWORD.lower()):
+                            logging.info(f"Actually they requested for sending/forwarding their message to their channel: {CHANNEL_ID}")
+                            await self.handle_channel_commands(update, context, prompt, chat_id)
+                        else:
+                            prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request."
+
+                            
+
+                    if (update.message.reply_to_message and update.message.reply_to_message.text and 
+                            update.message.reply_to_message.from_user.id != context.bot.id):
+                        logging.info(f"And replied to the message: {update.message.reply_to_message}")
+                        prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id}`, Answer their request."
+                    await self.process_system_chat_response(update, context, prompt, chat_id)
+                    return
+
                 else:
                     if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
                         logging.info('Message is a reply to the bot, allowing...')
@@ -1075,8 +1099,41 @@ class ChatGPTTelegramBot:
                         logging.warning('Message does not start with trigger keyword, ignoring...')
                         return
                 await self.process_openai_response(update, context, prompt, chat_id)
+
         else:
             await self.process_openai_response(update, context, prompt, chat_id)
+
+    async def moderate(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        React to incoming moderation requests and respond accordingly.
+        """
+        if update.edited_message or not update.message or update.message.via_bot:
+            return
+
+        if not await self.check_allowed_and_within_budget(update, context):
+            return
+
+        logging.info(
+            f'New moderation request received from user {update.message.from_user.name} (id: {update.message.from_user.id})')
+        chat_id = update.effective_chat.id
+        user_id = update.message.from_user.id
+        prompt = message_text(update.message)
+        self.last_message[chat_id] = prompt
+
+        if is_group_chat(update):
+            if update.message.text.lower().startswith('/moderate'):
+                logging.info(f"User requested for Moderation for group with message_thread_id:{update.message.message_thread_id} and group_id={update.message.chat.id}")
+                prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request.NOTHING more!"                        
+                await self.process_system_chat_response(update, context, prompt, chat_id)
+                return
+
+            else:
+                if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
+                    logging.info('Message is a reply to the bot, allowing...')
+                else:
+                    logging.warning('Message does not start with trigger keyword, ignoring...')
+                    return
+
 
 
     async def inline_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1335,6 +1392,9 @@ class ChatGPTTelegramBot:
         application.add_handler(CommandHandler('resend', self.resend))
         application.add_handler(CommandHandler(
             'chat', self.prompt, filters=filters.ChatType.GROUP | filters.ChatType.SUPERGROUP)
+        )
+        application.add_handler(CommandHandler(
+            'moderate', self.moderate, filters=filters.ChatType.GROUP | filters.ChatType.SUPERGROUP)
         )
         application.add_handler(MessageHandler(
             filters.PHOTO | filters.Document.IMAGE,
