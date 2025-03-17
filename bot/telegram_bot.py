@@ -454,7 +454,7 @@ class ChatGPTTelegramBot:
                         )
                 else:
                     # Get the response of the transcript
-                    response, total_tokens = await self.openai.get_chat_response(chat_id=chat_id, query=transcript)
+                    response, total_tokens = await self.openai.get_chat_response(chat_id=chat_id, role="user", query=transcript)
 
                     self.usage[user_id].add_chat_tokens(total_tokens, self.config['token_price'])
                     if str(user_id) not in allowed_user_ids and 'guests' in self.usage:
@@ -694,7 +694,7 @@ class ChatGPTTelegramBot:
                     message_thread_id=get_thread_id(update)
                 )
 
-                stream_response = self.openai.get_chat_response_stream(chat_id=chat_id, query=prompt)
+                stream_response = self.openai.get_chat_response_stream(chat_id=chat_id, role="user", query=prompt)
                 i = 0
                 prev = ''
                 sent_message = None
@@ -775,7 +775,7 @@ class ChatGPTTelegramBot:
             else:
                 async def _reply():
                     nonlocal total_tokens
-                    response, total_tokens = await self.openai.get_chat_response(chat_id=chat_id, query=prompt)
+                    response, total_tokens = await self.openai.get_chat_response(chat_id=chat_id, role="user", query=prompt)
 
                     if is_direct_result(response):
                         return await handle_direct_result(self.config, update, response)
@@ -827,7 +827,7 @@ class ChatGPTTelegramBot:
                     message_thread_id=get_thread_id(update)
                 )
 
-                stream_response = self.openai.get_system_chat_response_stream(chat_id=chat_id, query=prompt)
+                stream_response = self.openai.get_system_chat_response_stream(chat_id=chat_id, role="system", query=prompt)
                 i = 0
                 prev = ''
                 sent_message = None
@@ -908,7 +908,7 @@ class ChatGPTTelegramBot:
             else:
                 async def _reply():
                     nonlocal total_tokens
-                    response, total_tokens = await self.openai.get_system_chat_response(chat_id=chat_id, query=prompt)
+                    response, total_tokens = await self.openai.get_system_chat_response(chat_id=chat_id, role="system", query=prompt)
 
                     if is_direct_result(response):
                         return await handle_direct_result(self.config, update, response)
@@ -961,7 +961,7 @@ class ChatGPTTelegramBot:
                     message_thread_id=get_thread_id(update)
                 )
 
-                stream_response = self.openai.get_sa_system_chat_response_stream(chat_id=chat_id, query=prompt)
+                stream_response = self.openai.get_sa_system_chat_response_stream(chat_id=chat_id, role="system", query=prompt)
                 i = 0
                 prev = ''
                 sent_message = None
@@ -1042,7 +1042,7 @@ class ChatGPTTelegramBot:
             else:
                 async def _reply():
                     nonlocal total_tokens
-                    response, total_tokens = await self.openai.get_sa_system_chat_response(chat_id=chat_id, query=prompt)
+                    response, total_tokens = await self.openai.get_sa_system_chat_response(chat_id=chat_id, role="system", query=prompt)
 
                     if is_direct_result(response):
                         return await handle_direct_result(self.config, update, response)
@@ -1156,21 +1156,6 @@ class ChatGPTTelegramBot:
             forward_response = "-ONLY- Tell the user their message has been forwarded to their channel successfully."
             await self.process_system_chat_response(update, context, forward_response, chat_id)
 
-        elif prompt.lower().startswith(SEND_KEYWORD.lower()):
-            # Extract the part of the prompt after the send keyword and strip spaces.
-            # Note: Changed to use SEND_KEYWORD for correct slicing.
-            user_input_after_keyword = prompt[len(SEND_KEYWORD):].strip()
-            # Get the replied message.
-            replied_message = update.effective_message.reply_to_message
-            # If no extra content is provided, send the replied-to message.
-            if not user_input_after_keyword:
-                logging.info(f"The sent message is: {replied_message}")
-                await self.send_replied_message(update, context)
-            else:
-                await context.bot.send_message(chat_id=CHANNEL_ID, text=user_input_after_keyword)
-            logging.info(f"Sent message to the channel {CHANNEL_ID}: %s", user_input_after_keyword)
-            send_response = "-ONLY- Tell the user their message has been sent to their channel successfully."
-            await self.process_system_chat_response(update, context, send_response, chat_id)
         return
     async def prompt(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -1190,42 +1175,47 @@ class ChatGPTTelegramBot:
         self.last_message[chat_id] = prompt
 
         if is_group_chat(update):
-            # Check if the prompt starts with either the forward or send keyword
-            if prompt.lower().startswith(FORWARD_KEYWORD.lower()) or prompt.lower().startswith(SEND_KEYWORD.lower()):
-                await self.handle_channel_commands(update, context, prompt, chat_id)
-            else:
-                gp_trigger_keyword = self.config['group_trigger_keyword']
-                mod_trigger_keyword = self.config['mod_trigger_keyword']
-
-                if prompt.lower().startswith(mod_trigger_keyword.lower()) :
-                    logging.info(f"User requested for `Indirect` Group moderation with message_thread_id:{update.message.message_thread_id} and group_id={update.message.chat.id}")
-                    if prompt.lower().startswith(mod_trigger_keyword.lower()) and update.message.reply_to_message == None:
-                        prompt = prompt[len(mod_trigger_keyword):].strip()
-                        logging.info(f"With the prompt:{prompt}, with {update.message.reply_to_message}")
-                        prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request.NOTHING MORE!"                        
+            gp_trigger_keyword = self.config['group_trigger_keyword']
+            mod_trigger_keyword = self.config['mod_trigger_keyword']
+            if prompt.lower().startswith(FORWARD_KEYWORD.lower()):
+                await self.handle_channel_commands(update,context,prompt,chat_id)
+            elif prompt.lower().startswith(mod_trigger_keyword.lower()) :
+                logging.info(f"User requested for `Indirect` Group moderation with message_thread_id:{update.message.message_thread_id} and group_id={update.message.chat.id}")
+                if prompt.lower().startswith(mod_trigger_keyword.lower()) and update.message.reply_to_message == None:
+                    prompt = prompt[len(mod_trigger_keyword):].strip()
+                    logging.info(f"With the prompt:{prompt}")
+                    prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request.NOTHING MORE!"                        
 
 
-                    if (update.message.reply_to_message and update.message.reply_to_message.text):
-                        logging.info(f"by replying to the message: {update.message.reply_to_message}")
-                        prompt = f'"User replied to the text :`{update.message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request.NOTHING MORE!"
-                    await self.process_sa_system_chat_response(update, context, prompt, chat_id)
-                    return
-                elif prompt.lower().startswith(gp_trigger_keyword.lower()) or update.message.text.lower().startswith('/chat'):
-                    if prompt.lower().startswith(gp_trigger_keyword.lower()):
-                        prompt = prompt[len(gp_trigger_keyword):].strip()
-                        if prompt.lower().startswith(FORWARD_KEYWORD.lower()) or prompt.lower().startswith(SEND_KEYWORD.lower()):
-                            await self.handle_channel_commands(update, context, prompt, chat_id)
-                            
-
-                    if (update.message.reply_to_message and update.message.reply_to_message.text):
-                        prompt = f'"{update.message.reply_to_message.text}" {prompt}'
-                else:
-                    if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
-                        logging.info('Message is a reply to the bot, allowing...')
+                if (update.message.reply_to_message):
+                    if update.message.reply_to_message.text:
+                        logging.info(f"by replying to the text: {update.message.reply_to_message}")
+                        prompt = f'"User replied to the text :`{update.message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_id={update.message.reply_to_message.message_id} message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request.NOTHING MORE!"
+                if (update.effective_message.reply_to_message):
+                    if update.effective_message.reply_to_message.text:
+                        logging.info(f"by replying to bot's text: {update.message.reply_to_message}")
+                        prompt = f'"User replied to the message :`{update.effective_message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_id={update.effective_message.reply_to_message.message_id} message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request.NOTHING MORE!"
                     else:
-                        logging.warning('Message does not start with trigger keyword, ignoring...')
-                        return
-                await self.process_openai_response(update, context, prompt, chat_id)
+                        logging.info(f"by replying to bot's non-text message: {update.message.reply_to_message}")
+                        prompt = f'"User replied to the message :`{update.message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_id={update.message.reply_to_message.message_id} message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request.NOTHING MORE!"
+                await self.process_sa_system_chat_response(update, context, prompt, chat_id)
+                return
+            elif prompt.lower().startswith(gp_trigger_keyword.lower()) or update.message.text.lower().startswith('/chat'):
+                if prompt.lower().startswith(gp_trigger_keyword.lower()):
+                    prompt = prompt[len(gp_trigger_keyword):].strip()
+                    if prompt.lower().startswith(FORWARD_KEYWORD.lower()) or prompt.lower().startswith(SEND_KEYWORD.lower()):
+                        await self.handle_channel_commands(update, context, prompt, chat_id)
+                        
+
+                if (update.message.reply_to_message and update.message.reply_to_message.text):
+                    prompt = f'"{update.message.reply_to_message.text}" {prompt}'
+            else:
+                if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
+                    logging.info('Message is a reply to the bot, allowing...')
+                else:
+                    logging.warning('Message does not start with trigger keyword, ignoring...')
+                    return
+            await self.process_openai_response(update, context, prompt, chat_id)
 
         else:
             await self.process_openai_response(update, context, prompt, chat_id)
@@ -1337,7 +1327,7 @@ class ChatGPTTelegramBot:
 
                 unavailable_message = localized_text("function_unavailable_in_inline_mode", bot_language)
                 if self.config['stream']:
-                    stream_response = self.openai.get_chat_response_stream(chat_id=user_id, query=query)
+                    stream_response = self.openai.get_chat_response_stream(chat_id=user_id, role="user", query=query)
                     i = 0
                     prev = ''
                     backoff = 0
@@ -1405,7 +1395,7 @@ class ChatGPTTelegramBot:
                                                             parse_mode=constants.ParseMode.MARKDOWN)
 
                         logging.info(f'Generating response for inline query by {name}')
-                        response, total_tokens = await self.openai.get_chat_response(chat_id=user_id, query=query)
+                        response, total_tokens = await self.openai.get_chat_response(chat_id=user_id, role="user", query=query)
 
                         if is_direct_result(response):
                             cleanup_intermediate_files(response)

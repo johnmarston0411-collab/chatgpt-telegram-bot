@@ -39,13 +39,17 @@ class TelegramModerator(Plugin):
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["send_to_channel", "send_to_topic", "get_recent_chats", "close_topic", "re-open_topic"],
-                        "description": "The action to perform:" 
-                        "'send_to_channel' a new message to the channel.Distinct between this and 'send_to_topic'"
-                        "'send_to_topic' a new message to the topic.**Use with caution!**"
-                        "'get_recent_chats' to retrieve recent chats. " 
-                        "'close_topic' to close a forum topic and 'open_topic' to open a forum topic.**Use with caution!**"
-                        "'re-open_topic' to re-open a previoulsy closed topic."
+                        "enum": ["send_to_channel", "send_to_topic", "get_recent_chats", "close_topic", "re-open_topic", "forward_to_channel"],
+                        "description": "The action to perform:"
+                        "## for channel:" 
+                        "'send_to_channel' sends a new message to the channel. Distinct between this and 'send_to_topic'"
+                        "'forward_to_channel' forwards a message to the channel."
+                        " "
+                        "## for group and its topic"
+                        "'send_to_topic' sends a new message to the topic. **Use with caution!**"
+                        "'get_recent_chats' retrieves recent chats. " 
+                        "'close_topic' closes a forum topic and 'open_topic' opens a forum topic. **Use with caution!**"
+                        "'re-open_topic' re-opens a previously closed topic."
                     },
                     "message_text": {
                         "type": "string",
@@ -58,9 +62,13 @@ class TelegramModerator(Plugin):
                     "message_thread_id": {
                         "type": "integer",
                         "description": "The message_thread_id of the topic to manage. Must be provided for actions related to topics."
+                    },
+                    "message_id": {
+                        "type": "integer",
+                        "description": "The ID of the message to forward. Required for 'forward_to_channel' action."
                     }
                 },
-                "required": ["action","message_text","group_id","message_thread_id"]
+                "required": ["action","message_text","group_id","message_thread_id","message_id"]
             }
         }]
 
@@ -80,6 +88,7 @@ class TelegramModerator(Plugin):
         group_id = kwargs.get("group_id")
         message_text = kwargs.get("message_text")
         message_thread_id = kwargs.get("message_thread_id")
+        message_id = kwargs.get("message_id")
 
         # Initialize the Telegram Bot.
         bot = Bot(token=BOT_TOKEN_MODERATOR)
@@ -90,18 +99,19 @@ class TelegramModerator(Plugin):
                 await bot.send_message(chat_id=CHANNEL_ID, text=message_text)
                 return {"status": "success", "action": "send", "details": message_text}
 
-            if action == "send_to_topic":
-                # Send a new message to the topic.
-                await bot.send_message(chat_id=group_id, message_thread_id=message_thread_id, text=message_text)
-                return {"status": "success", "action": "send", "details": f"sent the message:`{message_text}` successfully"}
+            elif action == "forward_to_channel":
+                if not message_id:
+                    return {"error": "message_id is required to forward a message."}
+                await bot.forward_message(chat_id=CHANNEL_ID, from_chat_id=group_id, message_id=message_id)
+                return {"status": "success", "action": "forward", "details": f"Message {message_id} forwarded to channel {CHANNEL_ID}"}
 
             elif action == "get_recent_chats":
                 # Retrieve pending updates from the bot.
                 updates = await bot.get_updates(offset=0, timeout=10)
                 messages = []
                 for idx, update in enumerate(updates, start=1):
-                    if update.message :
-                        text = update.message.text or "No text"
+                    if update.effective_message :
+                        text = update.effective_message.text or "No text"
                         thread_id = getattr(update.message, "message_thread_id", None)
                         chat_id = update.message.chat.id
                         messages.append(f"Text: {text}, Thread ID: {thread_id}, Chat ID: {chat_id}")
@@ -109,19 +119,26 @@ class TelegramModerator(Plugin):
                 result = "\n".join(messages[-10:])
                 return {"status": "success", "action": "get_recent", "details": result}
 
+            elif action == "send_to_topic":
+                # Send a new message to the topic.
+                await bot.send_message(chat_id=group_id, message_thread_id=message_thread_id, text=message_text)
+                return {"status": "success", "action": "send", "details": f"sent the message:`{message_text}` successfully"}
+
             elif action == "close_topic":
                 if not message_thread_id:
                     return {"error": "message_thread_id is required to close a topic."}
                 await bot.close_forum_topic(chat_id=group_id, message_thread_id=message_thread_id)
-                await bot.send_message(chat_id=group_id, message_thread_id=message_thread_id, text=f"{message_text} - Topic closed.")
+                await bot.send_message(chat_id=group_id, message_thread_id=message_thread_id, text=f"{message_text}\n 🤖by Moderator bot✍🏻")
                 return {"status": "success", "action": "close_topic", "details": f"Topic {message_thread_id} closed in group {group_id}"}
 
             elif action == "re-open_topic":
                 if not message_thread_id:
                     return {"error": "message_thread_id is required to open a topic."}
                 await bot.open_forum_topic(chat_id=group_id, message_thread_id=message_thread_id)
-                await bot.send_message(chat_id=group_id, message_thread_id=message_thread_id, text=f"{message_text} - Topic opened.")
+                await bot.send_message(chat_id=group_id, message_thread_id=message_thread_id, text=f"{message_text} \n 🤖by Moderator bot✍🏻")
                 return {"status": "success", "action": "open_topic", "details": f"Topic {message_thread_id} opened in group {group_id}"}
+
+
 
             else:
                 return {"status": "success", "action": "process", "details": "Invalid action provided"}

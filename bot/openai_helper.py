@@ -128,7 +128,7 @@ class OpenAIHelper:
             self.reset_chat_history(chat_id)
         return len(self.conversations[chat_id]), self.__count_tokens(self.conversations[chat_id])
 
-    async def get_chat_response(self, chat_id: int, query: str) -> tuple[str, str]:
+    async def get_chat_response(self, chat_id: int,role:str, query: str) -> tuple[str, str]:
         """
         Gets a full response from the GPT model.
         :param chat_id: The chat ID
@@ -136,7 +136,7 @@ class OpenAIHelper:
         :return: The answer from the model and the number of tokens used
         """
         plugins_used = ()
-        response = await self.__common_get_chat_response(chat_id, query)
+        response = await self.__common_get_chat_response(chat_id, role, query)
         if self.config['enable_functions'] and not self.conversations_vision[chat_id]:
             response, plugins_used = await self.__handle_function_call(chat_id, response)
             if is_direct_result(response):
@@ -171,7 +171,7 @@ class OpenAIHelper:
 
         return answer, response.usage.total_tokens
 
-    async def get_chat_response_stream(self, chat_id: int, query: str):
+    async def get_chat_response_stream(self, chat_id: int, role:str, query: str):
         """
         Stream response from the GPT model.
         :param chat_id: The chat ID
@@ -179,7 +179,7 @@ class OpenAIHelper:
         :return: The answer from the model and the number of tokens used, or 'not_finished'
         """
         plugins_used = ()
-        response = await self.__common_get_chat_response(chat_id, query, stream=True)
+        response = await self.__common_get_chat_response(chat_id, role, query, stream=True)
         if self.config['enable_functions'] and not self.conversations_vision[chat_id]:
             response, plugins_used = await self.__handle_function_call(chat_id, response, stream=True)
             if is_direct_result(response):
@@ -210,7 +210,7 @@ class OpenAIHelper:
         yield answer, tokens_used
 
 
-    async def get_system_chat_response(self, chat_id: int, query: str) -> tuple[str, str]:
+    async def get_system_chat_response(self, chat_id: int,role:str, query: str) -> tuple[str, str]:
         """
         Gets a full response from the GPT model for system-generated input.
         :param chat_id: The chat ID
@@ -218,7 +218,7 @@ class OpenAIHelper:
         :return: The answer from the model and the number of tokens used
         """
         plugins_used = ()
-        response = await self.__common_get_chat_response(chat_id, query)
+        response = await self.__common_get_chat_response(chat_id, role, query)
         if self.config['enable_functions'] and not self.conversations_vision[chat_id]:
             response, plugins_used = await self.__handle_function_call(chat_id, response)
             if is_direct_result(response):
@@ -253,7 +253,7 @@ class OpenAIHelper:
 
         return answer, response.usage.total_tokens
 
-    async def get_system_chat_response_stream(self, chat_id: int, query: str):
+    async def get_system_chat_response_stream(self, chat_id: int,role:str, query: str):
         """
         Stream response from the GPT model for system-generated input.
         :param chat_id: The chat ID
@@ -261,7 +261,7 @@ class OpenAIHelper:
         :return: The answer from the model and the number of tokens used, or 'not_finished'
         """
         plugins_used = ()
-        response = await self.__common_get_chat_response(chat_id, query, stream=True)
+        response = await self.__common_get_chat_response(chat_id, role, query, stream=True)
         if self.config['enable_functions'] and not self.conversations_vision[chat_id]:
             response, plugins_used = await self.__handle_function_call(chat_id, response, stream=True)
             if is_direct_result(response):
@@ -292,7 +292,7 @@ class OpenAIHelper:
         yield answer, tokens_used
 
 
-    async def get_sa_system_chat_response(self, chat_id: int, query: str) -> tuple[str, str]:
+    async def get_sa_system_chat_response(self, chat_id: int,role:str, query: str) -> tuple[str, str]:
         """
         Gets a full response from the GPT model for system-generated input.
         :param chat_id: The chat ID
@@ -300,7 +300,7 @@ class OpenAIHelper:
         :return: The answer from the model and the number of tokens used
         """
         plugins_used = ()
-        response = await self.__common_get_chat_response(chat_id, query)
+        response = await self.__common_get_chat_response(chat_id, role, query)
         if self.config['enable_functions'] and not self.conversations_vision[chat_id]:
             response, plugins_used = await self.__handle_function_call(chat_id, response,super_access=True)
             if is_direct_result(response):
@@ -335,7 +335,7 @@ class OpenAIHelper:
 
         return answer, response.usage.total_tokens
 
-    async def get_sa_system_chat_response_stream(self, chat_id: int, query: str):
+    async def get_sa_system_chat_response_stream(self, chat_id: int,role:str, query: str):
         """
         Stream response from the GPT model for system-generated input.
         :param chat_id: The chat ID
@@ -343,7 +343,7 @@ class OpenAIHelper:
         :return: The answer from the model and the number of tokens used, or 'not_finished'
         """
         plugins_used = ()
-        response = await self.__common_get_chat_response(chat_id, query, stream=True)
+        response = await self.__common_get_chat_response(chat_id, role, query, stream=True)
         if self.config['enable_functions'] and not self.conversations_vision[chat_id]:
             response, plugins_used = await self.__handle_function_call(chat_id, response, stream=True,super_access=True)
             if is_direct_result(response):
@@ -380,7 +380,7 @@ class OpenAIHelper:
         wait=wait_fixed(20),
         stop=stop_after_attempt(3)
     )
-    async def __common_get_chat_response(self, chat_id: int, query: str, stream=False):
+    async def __common_get_chat_response(self, chat_id: int, role:str, query: str, stream=False):
         """
         Request a response from the GPT model.
         :param chat_id: The chat ID
@@ -394,7 +394,7 @@ class OpenAIHelper:
 
             self.last_updated[chat_id] = datetime.datetime.now()
 
-            self.__add_to_history(chat_id, role="user", content=query)
+            self.__add_to_history(chat_id, role=role, content=query)
 
             # Summarize the chat history if it's too long to avoid excessive token usage
             token_count = self.__count_tokens(self.conversations[chat_id])
@@ -472,15 +472,16 @@ class OpenAIHelper:
             else:
                 return response, plugins_used
 
-        logging.info(f'Calling function {function_name} with arguments {arguments}')
         if function_name != "telegram_moderator":
+            logging.info(f'Calling function {function_name} with arguments {arguments}')
             function_response = await self.plugin_manager.call_function(function_name, self, arguments)
         else:
             if super_access:
+                    logging.info(f'! Super_Acess Call: Bot has called Telegram moderator function: `{function_name}` with arguments {arguments}')
                     function_response = await self.plugin_manager.call_function(function_name, self, arguments)
             else:
+                logging.info(f'The bot doesn\'t have access to built-in moderating plugin[s],aborting function call {function_name} with arguments {arguments}')
                 function_response = json.dumps({"status": "failed", "details": "You don't have access to this function. Ask the user if they want to moderate telegram ,they have to use '/moderate' command."}, default=str)
-                # function_response = {"status": "failed", "details": "You don't have access to this function. Ask the user if they want to moderate telegram ,they have to use '/moderate' command."}
 
 
 
@@ -501,7 +502,8 @@ class OpenAIHelper:
             function_call='auto' if times < self.config['functions_max_consecutive_calls'] else 'none',
             stream=stream
         )
-        return await self.__handle_function_call(chat_id, response, stream, times + 1, plugins_used)
+        return await self.__handle_function_call(chat_id, response, stream, times + 1, plugins_used,super_access=super_access)
+
 
     async def generate_image(self, prompt: str) -> tuple[str, str]:
         """
