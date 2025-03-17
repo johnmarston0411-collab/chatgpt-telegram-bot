@@ -1202,12 +1202,12 @@ class ChatGPTTelegramBot:
                     if prompt.lower().startswith(mod_trigger_keyword.lower()) and update.message.reply_to_message!=None:
                         prompt = prompt[len(mod_trigger_keyword):].strip()
                         logging.info(f"With the prompt:{prompt}, with {update.message.reply_to_message}")
-                        prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request."                        
+                        prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request.NOTHING MORE!"                        
 
 
                     if (update.message.reply_to_message and update.message.reply_to_message.text):
                         logging.info(f"by replying to the message: {update.message.reply_to_message}")
-                        prompt = f'"User replied to the text :`{update.message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request."
+                        prompt = f'"User replied to the text :`{update.message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request.NOTHING MORE!"
                     await self.process_sa_system_chat_response(update, context, prompt, chat_id)
                     return
                 elif prompt.lower().startswith(gp_trigger_keyword.lower()) or update.message.text.lower().startswith('/chat'):
@@ -1249,11 +1249,11 @@ class ChatGPTTelegramBot:
             if update.message.text.lower().startswith('/moderate') and update.message.reply_to_message != None :
                 logging.info(f"User requested for `Direct` Group moderation with message_thread_id:{update.message.message_thread_id} and group_id={update.message.chat.id}")
                 prompt = prompt[len("/moderate"):].strip()
-                prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request."                        
+                prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request.NOTHING MORE!"                        
 
             if (update.message.reply_to_message and update.message.reply_to_message.text):
                 logging.info(f"And replied to the message: {update.message.reply_to_message}")
-                prompt = f'"User replied to the text :`{update.message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request."
+                prompt = f'"User replied to the text :`{update.message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request.NOTHING MORE!"
             await self.process_sa_system_chat_response(update, context, prompt, chat_id)
             return
 
