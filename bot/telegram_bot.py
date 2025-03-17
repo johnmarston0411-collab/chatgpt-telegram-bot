@@ -1196,36 +1196,29 @@ class ChatGPTTelegramBot:
             else:
                 gp_trigger_keyword = self.config['group_trigger_keyword']
                 mod_trigger_keyword = self.config['mod_trigger_keyword']
-                if prompt.lower().startswith(gp_trigger_keyword.lower()) or update.message.text.lower().startswith('/chat'):
+
+                if prompt.lower().startswith(mod_trigger_keyword.lower()) :
+                    logging.info(f"User requested for `Indirect` Group moderation with message_thread_id:{update.message.message_thread_id} and group_id={update.message.chat.id}")
+                    if prompt.lower().startswith(mod_trigger_keyword.lower()) and update.message.reply_to_message!=None:
+                        prompt = prompt[len(mod_trigger_keyword):].strip()
+                        logging.info(f"With the prompt:{prompt}, with {update.message.reply_to_message}")
+                        prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request."                        
+
+
+                    if (update.message.reply_to_message and update.message.reply_to_message.text):
+                        logging.info(f"by replying to the message: {update.message.reply_to_message}")
+                        prompt = f'"User replied to the text :`{update.message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request."
+                    await self.process_sa_system_chat_response(update, context, prompt, chat_id)
+                    return
+                elif prompt.lower().startswith(gp_trigger_keyword.lower()) or update.message.text.lower().startswith('/chat'):
                     if prompt.lower().startswith(gp_trigger_keyword.lower()):
                         prompt = prompt[len(gp_trigger_keyword):].strip()
                         if prompt.lower().startswith(FORWARD_KEYWORD.lower()) or prompt.lower().startswith(SEND_KEYWORD.lower()):
                             await self.handle_channel_commands(update, context, prompt, chat_id)
                             
 
-                    if (update.message.reply_to_message and update.message.reply_to_message.text and 
-                            update.message.reply_to_message.from_user.id != context.bot.id):
+                    if (update.message.reply_to_message and update.message.reply_to_message.text):
                         prompt = f'"{update.message.reply_to_message.text}" {prompt}'
-                elif prompt.lower().startswith(mod_trigger_keyword.lower()) or update.message.text.lower().startswith('/moderate'):
-                    logging.info(f"User requested for Moderation for group with message_thread_id:{update.message.message_thread_id}")
-                    if prompt.lower().startswith(mod_trigger_keyword.lower()):
-                        prompt = prompt[len(mod_trigger_keyword):].strip()
-                        logging.info(f"With the prompt:{prompt}")
-                        if prompt.lower().startswith(FORWARD_KEYWORD.lower()) or prompt.lower().startswith(SEND_KEYWORD.lower()):
-                            logging.info(f"Actually they requested for sending/forwarding their message to their channel: {CHANNEL_ID}")
-                            await self.handle_channel_commands(update, context, prompt, chat_id)
-                        else:
-                            prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request."
-
-                            
-
-                    if (update.message.reply_to_message and update.message.reply_to_message.text and 
-                            update.message.reply_to_message.from_user.id != context.bot.id):
-                        logging.info(f"And replied to the message: {update.message.reply_to_message}")
-                        prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id}`, Answer their request."
-                    await self.process_sa_system_chat_response(update, context, prompt, chat_id)
-                    return
-
                 else:
                     if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
                         logging.info('Message is a reply to the bot, allowing...')
@@ -1247,26 +1240,22 @@ class ChatGPTTelegramBot:
         if not await self.check_allowed_and_within_budget(update, context):
             return
 
-        logging.info(
-            f'New moderation request received from user {update.message.from_user.name} (id: {update.message.from_user.id})')
         chat_id = update.effective_chat.id
         user_id = update.message.from_user.id
         prompt = message_text(update.message)
         self.last_message[chat_id] = prompt
 
         if is_group_chat(update):
-            if update.message.text.lower().startswith('/moderate'):
-                logging.info(f"User requested for Moderation for group with message_thread_id:{update.message.message_thread_id} and group_id={update.message.chat.id}")
-                prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request.NOTHING more!"                        
-                await self.process_sa_system_chat_response(update, context, prompt, chat_id)
-                return
+            if update.message.text.lower().startswith('/moderate') and update.message.reply_to_message != None :
+                logging.info(f"User requested for `Direct` Group moderation with message_thread_id:{update.message.message_thread_id} and group_id={update.message.chat.id}")
+                prompt = prompt[len("/moderate"):].strip()
+                prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request."                        
 
-            else:
-                if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
-                    logging.info('Message is a reply to the bot, allowing...')
-                else:
-                    logging.warning('Message does not start with trigger keyword, ignoring...')
-                    return
+            if (update.message.reply_to_message and update.message.reply_to_message.text):
+                logging.info(f"And replied to the message: {update.message.reply_to_message}")
+                prompt = f'"User replied to the text :`{update.message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request."
+            await self.process_sa_system_chat_response(update, context, prompt, chat_id)
+            return
 
 
 

@@ -41,7 +41,7 @@ class TelegramModerator(Plugin):
                         "type": "string",
                         "enum": ["send_to_channel", "send_to_topic", "get_recent_chats", "close_topic", "re-open_topic"],
                         "description": "The action to perform:" 
-                        "'send_to_channel' a new message to the channel.**Use with double verification!**"
+                        "'send_to_channel' a new message to the channel.Distinct between this and 'send_to_topic'"
                         "'send_to_topic' a new message to the topic.**Use with caution!**"
                         "'get_recent_chats' to retrieve recent chats. " 
                         "'close_topic' to close a forum topic and 'open_topic' to open a forum topic.**Use with caution!**"
@@ -85,10 +85,15 @@ class TelegramModerator(Plugin):
         bot = Bot(token=BOT_TOKEN_MODERATOR)
 
         try:
+            if action == "send_to_channel":
+                # Send a new message to the channel.
+                await bot.send_message(chat_id=CHANNEL_ID, text=message_text)
+                return {"status": "success", "action": "send", "details": message_text}
+
             if action == "send_to_topic":
                 # Send a new message to the topic.
-                await bot.send_message(chat_id=group_id, message_thread_id=message_thread_id, text=f"{message_text} - Topic closed.")
-                return {"status": "success", "action": "send", "details": message_text}
+                await bot.send_message(chat_id=group_id, message_thread_id=message_thread_id, text=message_text)
+                return {"status": "success", "action": "send", "details": f"sent the message:`{message_text}` successfully"}
 
             elif action == "get_recent_chats":
                 # Retrieve pending updates from the bot.
