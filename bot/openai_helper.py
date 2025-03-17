@@ -171,6 +171,45 @@ class OpenAIHelper:
 
         return answer, response.usage.total_tokens
 
+    async def get_chat_response_stream(self, chat_id: int, query: str):
+        """
+        Stream response from the GPT model.
+        :param chat_id: The chat ID
+        :param query: The query to send to the model
+        :return: The answer from the model and the number of tokens used, or 'not_finished'
+        """
+        plugins_used = ()
+        response = await self.__common_get_chat_response(chat_id, query, stream=True)
+        if self.config['enable_functions'] and not self.conversations_vision[chat_id]:
+            response, plugins_used = await self.__handle_function_call(chat_id, response, stream=True)
+            if is_direct_result(response):
+                yield response, '0'
+                return
+
+        answer = ''
+        async for chunk in response:
+            if len(chunk.choices) == 0:
+                continue
+            delta = chunk.choices[0].delta
+            if delta.content:
+                answer += delta.content
+                yield answer, 'not_finished'
+        answer = answer.strip()
+        self.__add_to_history(chat_id, role="assistant", content=answer)
+        tokens_used = str(self.__count_tokens(self.conversations[chat_id]))
+
+        show_plugins_used = len(plugins_used) > 0 and self.config['show_plugins_used']
+        plugin_names = tuple(self.plugin_manager.get_plugin_source_name(plugin) for plugin in plugins_used)
+        if self.config['show_usage']:
+            answer += f"\n\n---\n💰 {tokens_used} {localized_text('stats_tokens', self.config['bot_language'])}"
+            if show_plugins_used:
+                answer += f"\n🔌 {', '.join(plugin_names)}"
+        elif show_plugins_used:
+            answer += f"\n\n---\n🔌 {', '.join(plugin_names)}"
+
+        yield answer, tokens_used
+
+
     async def get_system_chat_response(self, chat_id: int, query: str) -> tuple[str, str]:
         """
         Gets a full response from the GPT model for system-generated input.
@@ -214,9 +253,9 @@ class OpenAIHelper:
 
         return answer, response.usage.total_tokens
 
-    async def get_chat_response_stream(self, chat_id: int, query: str):
+    async def get_system_chat_response_stream(self, chat_id: int, query: str):
         """
-        Stream response from the GPT model.
+        Stream response from the GPT model for system-generated input.
         :param chat_id: The chat ID
         :param query: The query to send to the model
         :return: The answer from the model and the number of tokens used, or 'not_finished'
@@ -238,7 +277,7 @@ class OpenAIHelper:
                 answer += delta.content
                 yield answer, 'not_finished'
         answer = answer.strip()
-        self.__add_to_history(chat_id, role="assistant", content=answer)
+        self.__add_to_history(chat_id, role="system", content=answer)
         tokens_used = str(self.__count_tokens(self.conversations[chat_id]))
 
         show_plugins_used = len(plugins_used) > 0 and self.config['show_plugins_used']
@@ -252,7 +291,51 @@ class OpenAIHelper:
 
         yield answer, tokens_used
 
-    async def get_system_chat_response_stream(self, chat_id: int, query: str):
+
+    async def get_sa_system_chat_response(self, chat_id: int, query: str) -> tuple[str, str]:
+        """
+        Gets a full response from the GPT model for system-generated input.
+        :param chat_id: The chat ID
+        :param query: The query to send to the model
+        :return: The answer from the model and the number of tokens used
+        """
+        plugins_used = ()
+        response = await self.__common_get_chat_response(chat_id, query)
+        if self.config['enable_functions'] and not self.conversations_vision[chat_id]:
+            response, plugins_used = await self.__handle_function_call(chat_id, response,super_access=True)
+            if is_direct_result(response):
+                return response, '0'
+
+        answer = ''
+
+        if len(response.choices) > 1 and self.config['n_choices'] > 1:
+            for index, choice in enumerate(response.choices):
+                content = choice.message.content.strip()
+                if index == 0:
+                    self.__add_to_history(chat_id, role="system", content=content)
+                answer += f'{index + 1}\u20e3\n'
+                answer += content
+                answer += '\n\n'
+        else:
+            answer = response.choices[0].message.content.strip()
+            self.__add_to_history(chat_id, role="system", content=answer)
+
+        bot_language = self.config['bot_language']
+        show_plugins_used = len(plugins_used) > 0 and self.config['show_plugins_used']
+        plugin_names = tuple(self.plugin_manager.get_plugin_source_name(plugin) for plugin in plugins_used)
+        if self.config['show_usage']:
+            answer += "\n\n---\n" \
+                    f"💰 {str(response.usage.total_tokens)} {localized_text('stats_tokens', bot_language)}" \
+                    f" ({str(response.usage.prompt_tokens)} {localized_text('prompt', bot_language)}," \
+                    f" {str(response.usage.completion_tokens)} {localized_text('completion', bot_language)})"
+            if show_plugins_used:
+                answer += f"\n🔌 {', '.join(plugin_names)}"
+        elif show_plugins_used:
+            answer += f"\n\n---\n🔌 {', '.join(plugin_names)}"
+
+        return answer, response.usage.total_tokens
+
+    async def get_sa_system_chat_response_stream(self, chat_id: int, query: str):
         """
         Stream response from the GPT model for system-generated input.
         :param chat_id: The chat ID
@@ -262,7 +345,7 @@ class OpenAIHelper:
         plugins_used = ()
         response = await self.__common_get_chat_response(chat_id, query, stream=True)
         if self.config['enable_functions'] and not self.conversations_vision[chat_id]:
-            response, plugins_used = await self.__handle_function_call(chat_id, response, stream=True)
+            response, plugins_used = await self.__handle_function_call(chat_id, response, stream=True,super_access=True)
             if is_direct_result(response):
                 yield response, '0'
                 return
@@ -358,7 +441,7 @@ class OpenAIHelper:
         except Exception as e:
             raise Exception(f"⚠️ _{localized_text('error', bot_language)}._ ⚠️\n{str(e)}") from e
 
-    async def __handle_function_call(self, chat_id, response, stream=False, times=0, plugins_used=()):
+    async def __handle_function_call(self, chat_id, response, stream=False, times=0, plugins_used=(),super_access=False):
         function_name = ''
         arguments = ''
         if stream:
@@ -390,7 +473,16 @@ class OpenAIHelper:
                 return response, plugins_used
 
         logging.info(f'Calling function {function_name} with arguments {arguments}')
-        function_response = await self.plugin_manager.call_function(function_name, self, arguments)
+        if function_name != "telegram_moderator":
+            function_response = await self.plugin_manager.call_function(function_name, self, arguments)
+        else:
+            if super_access:
+                    function_response = await self.plugin_manager.call_function(function_name, self, arguments)
+            else:
+                function_response = json.dumps({"status": "failed", "details": "You don't have access to this function. Ask the user if they want to moderate telegram ,they have to use '/moderate' command."}, default=str)
+                # function_response = {"status": "failed", "details": "You don't have access to this function. Ask the user if they want to moderate telegram ,they have to use '/moderate' command."}
+
+
 
         if function_name not in plugins_used:
             plugins_used += (function_name,)
