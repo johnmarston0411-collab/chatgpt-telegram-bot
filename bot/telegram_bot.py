@@ -1199,7 +1199,7 @@ class ChatGPTTelegramBot:
 
                 if prompt.lower().startswith(mod_trigger_keyword.lower()) :
                     logging.info(f"User requested for `Indirect` Group moderation with message_thread_id:{update.message.message_thread_id} and group_id={update.message.chat.id}")
-                    if prompt.lower().startswith(mod_trigger_keyword.lower()) and update.message.reply_to_message!=None:
+                    if prompt.lower().startswith(mod_trigger_keyword.lower()) and update.message.reply_to_message == None:
                         prompt = prompt[len(mod_trigger_keyword):].strip()
                         logging.info(f"With the prompt:{prompt}, with {update.message.reply_to_message}")
                         prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request.NOTHING MORE!"                        
@@ -1246,7 +1246,7 @@ class ChatGPTTelegramBot:
         self.last_message[chat_id] = prompt
 
         if is_group_chat(update):
-            if update.message.text.lower().startswith('/moderate') and update.message.reply_to_message != None :
+            if update.message.text.lower().startswith('/moderate') and update.message.reply_to_message == None :
                 logging.info(f"User requested for `Direct` Group moderation with message_thread_id:{update.message.message_thread_id} and group_id={update.message.chat.id}")
                 prompt = prompt[len("/moderate"):].strip()
                 prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request.NOTHING MORE!"                        
