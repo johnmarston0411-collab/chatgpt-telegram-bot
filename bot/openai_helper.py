@@ -28,7 +28,7 @@ GPT_4_MODELS = ("gpt-4", "gpt-4-0314", "gpt-4-0613", "gpt-4-turbo-preview")
 GPT_4_32K_MODELS = ("gpt-4-32k", "gpt-4-32k-0314", "gpt-4-32k-0613")
 GPT_4_VISION_MODELS = ("gpt-4o",)
 GPT_4_128K_MODELS = ("gpt-4-1106-preview", "gpt-4-0125-preview", "gpt-4-turbo-preview", "gpt-4-turbo", "gpt-4-turbo-2024-04-09")
-GPT_4O_MODELS = ("gpt-4o", "gpt-4o-mini", "chatgpt-4o-latest")
+GPT_4O_MODELS = ("gpt-4o", "gpt-4o-mini", "gpt-4o-mini-2024-07-18", "chatgpt-4o-latest")
 O_MODELS = ("o1", "o1-mini", "o1-preview")
 
 #TogetherAI Models;Put your desired models from TogetherAI models here

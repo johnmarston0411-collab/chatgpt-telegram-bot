@@ -169,7 +169,7 @@ async def is_allowed(config, update: Update, context: CallbackContext, is_inline
         for user in itertools.chain(allowed_user_ids, admin_user_ids):
             if not user.strip():
                 continue
-            if await is_user_in_group(update, context, user):
+            if await is_user_in_group(update, context, user) and config['allow_group_users']:
                 logging.info(f'{user} is a member. Allowing group chat message...')
                 return True
         logging.info(f'Group chat messages from user {name} '

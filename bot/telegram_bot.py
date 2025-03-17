@@ -1196,7 +1196,7 @@ class ChatGPTTelegramBot:
                         logging.info(f"by replying to bot's text: {update.message.reply_to_message}")
                         prompt = f'"User replied to the message :`{update.effective_message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_id={update.effective_message.reply_to_message.message_id} message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request.NOTHING MORE!"
                     else:
-                        logging.info(f"by replying to bot's non-text message: {update.message.reply_to_message}")
+                        logging.info(f"by replying to bot's non-text message: {update.message.reply_to_message} \n")
                         prompt = f'"User replied to the message :`{update.message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_id={update.message.reply_to_message.message_id} message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request.NOTHING MORE!"
                 await self.process_sa_system_chat_response(update, context, prompt, chat_id)
                 return
