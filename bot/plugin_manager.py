@@ -16,6 +16,8 @@ from plugins.whois_ import WhoisPlugin
 from plugins.webshot import WebshotPlugin
 from plugins.iplocation import IpLocationPlugin
 from plugins.telegram_moderator import TelegramModerator
+from plugins.web_extract import WebContentScraperPlugin
+from plugins.arxiv_search import ArXivSearchPlugin
 
 
 class PluginManager:
@@ -42,6 +44,8 @@ class PluginManager:
             'webshot': WebshotPlugin,
             'iplocation': IpLocationPlugin,
             'telegram_moderator': TelegramModerator,
+            'web_extract': WebContentScraperPlugin,
+            'arxiv_search': ArXivSearchPlugin,
         }
         self.plugins = [plugin_mapping[plugin]() for plugin in enabled_plugins if plugin in plugin_mapping]
 

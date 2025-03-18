@@ -355,7 +355,14 @@ async def handle_direct_result(config, update: Update, response: any,direct_capt
             await update.effective_message.reply_photo(**common_args, photo=open(value, 'rb'))
     elif kind == 'gif' or kind == 'file':
         if format == 'url':
-            await update.effective_message.reply_document(**common_args, document=value)
+            i=1
+            if isinstance(value,list):
+                while i < len(value):
+                    await update.effective_message.reply_document(message_thread_id=common_args['message_thread_id'], document=value[i-1])
+                    i+=1
+                await update.effective_message.reply_document(**common_args, document=value[i-1])
+            else:
+                await update.effective_message.reply_document(**common_args, document=value)
         if format == 'path':
             await update.effective_message.reply_document(**common_args, document=open(value, 'rb'))
     elif kind == 'dice':

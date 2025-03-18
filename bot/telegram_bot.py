@@ -703,9 +703,10 @@ class ChatGPTTelegramBot:
 
                 async for content, tokens in stream_response:
                     if is_direct_result(content):
-                        direct_caption_prompt = "Give a caption based on the previous function you called, consice and clear for the user."
+                        direct_caption_prompt = "Since the function ran successfully, Give a follow-up caption based on the previous function you called, consice and clear for the user."
                         direct_caption , direct_tokens = await self.openai.get_chat_response(chat_id=chat_id, role="system", query=direct_caption_prompt)
-                        logging.info(f"direct caption is : {direct_caption}")
+                        # logging.info(f"direct caption is : {direct_caption}")
+                        total_tokens += direct_tokens
                         return await handle_direct_result(self.config, update, content , direct_caption)
 
                     if len(content.strip()) == 0:
@@ -781,9 +782,10 @@ class ChatGPTTelegramBot:
                     response, total_tokens = await self.openai.get_chat_response(chat_id=chat_id, role=role, query=prompt, super_access=super_access)
 
                     if is_direct_result(response):
-                        direct_caption_prompt = "Give a caption based on the previous function you called, consice and clear for the user."
+                        direct_caption_prompt = "Since the function ran successfully, Give a follow-up caption based on the previous function you called, consice and clear for the user."
                         direct_caption , direct_tokens = await self.openai.get_chat_response(chat_id=chat_id, role="system", query=direct_caption_prompt)
-                        logging.info(f"direct caption is : {direct_caption}")
+                        # logging.info(f"direct caption is : {direct_caption}")
+                        add_chat_request_to_usage_tracker(self.usage, self.config, update.message.from_user.id, direct_tokens)
                         return await handle_direct_result(self.config, update, response , direct_caption)
 
                     # Split into chunks of 4096 characters (Telegram's message limit)
