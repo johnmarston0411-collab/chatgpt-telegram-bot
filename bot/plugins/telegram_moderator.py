@@ -128,7 +128,6 @@ class TelegramModerator(Plugin):
                 if not message_thread_id:
                     return {"error": "message_thread_id is required to close a topic."}
                 await bot.close_forum_topic(chat_id=group_id, message_thread_id=message_thread_id)
-                await bot.send_message(chat_id=group_id, message_thread_id=message_thread_id, text=f"{message_text}\n 🤖by Moderator bot✍🏻")
                 return {"status": "success", "action": "close_topic", "details": f"Topic {message_thread_id} closed in group {group_id}"}
 
             elif action == "re-open_topic":

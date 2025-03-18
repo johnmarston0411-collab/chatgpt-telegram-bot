@@ -330,7 +330,7 @@ def is_direct_result(response: any) -> bool:
         return response.get('direct_result', False)
 
 
-async def handle_direct_result(config, update: Update, response: any):
+async def handle_direct_result(config, update: Update, response: any,direct_caption=""):
     """
     Handles a direct result from a plugin
     """
@@ -345,6 +345,7 @@ async def handle_direct_result(config, update: Update, response: any):
     common_args = {
         'message_thread_id': get_thread_id(update),
         'reply_to_message_id': get_reply_to_message_id(config, update),
+        'caption': direct_caption,
     }
 
     if kind == 'photo':
