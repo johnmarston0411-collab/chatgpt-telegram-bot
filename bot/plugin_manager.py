@@ -18,6 +18,7 @@ from plugins.iplocation import IpLocationPlugin
 from plugins.telegram_moderator import TelegramModerator
 from plugins.web_extract import WebContentScraperPlugin
 from plugins.arxiv_search import ArXivSearchPlugin
+from plugins.telegram_extract import TelegramScraperPlugin
 
 
 class PluginManager:
@@ -46,6 +47,7 @@ class PluginManager:
             'telegram_moderator': TelegramModerator,
             'web_extract': WebContentScraperPlugin,
             'arxiv_search': ArXivSearchPlugin,
+            'telegram_extract': TelegramScraperPlugin, 
         }
         self.plugins = [plugin_mapping[plugin]() for plugin in enabled_plugins if plugin in plugin_mapping]
 

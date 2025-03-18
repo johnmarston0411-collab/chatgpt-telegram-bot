@@ -912,6 +912,8 @@ class ChatGPTTelegramBot:
             f'New message received from user {update.message.from_user.name} (id: {update.message.from_user.id})')
         chat_id = update.effective_chat.id
         user_id = update.message.from_user.id
+        message_thread_id = update.message.message_thread_id
+        group_id = update.message.chat.id
         prompt = message_text(update.message)
         self.last_message[chat_id] = prompt
 
@@ -921,24 +923,26 @@ class ChatGPTTelegramBot:
             if prompt.lower().startswith(FORWARD_KEYWORD.lower()):
                 await self.handle_channel_commands(update,context,prompt,chat_id)
             elif prompt.lower().startswith(mod_trigger_keyword.lower()) :
-                logging.info(f"User requested for `Indirect` Group moderation with message_thread_id:{update.message.message_thread_id} and group_id={update.message.chat.id}")
+                logging.info(f"User requested for `Indirect` Group moderation with message_thread_id:{message_thread_id} and group_id={update.message.chat.id}")
                 if prompt.lower().startswith(mod_trigger_keyword.lower()) and update.message.reply_to_message == None:
                     prompt = prompt[len(mod_trigger_keyword):].strip()
                     logging.info(f"With the prompt:{prompt}")
-                    prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={update.message.message_thread_id} group_id={update.message.chat.id}`, Answer their request.NOTHING MORE!"                        
+                    prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={message_thread_id} group_id={update.message.chat.id}`, Answer their request.NOTHING MORE!"                        
 
 
                 if (update.message.reply_to_message):
                     if update.message.reply_to_message.text:
-                        logging.info(f"by replying to the text: {update.message.reply_to_message}")
-                        prompt = f'"User replied to the text :`{update.message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_id={update.message.reply_to_message.message_id} message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request.NOTHING MORE!"
+                        replied_text = update.message.reply_to_message.text
+                        logging.info(f"by replying to the text: {replied_text}")
+                        prompt = f'"User replied to the text :`{replied_text}" by the prompt: {prompt}' + f". Using these information : 'replied_message_id={update.message.reply_to_message.message_id} message_thread_id={message_thread_id} and group_id={group_id}', Answer their request.NOTHING MORE!"
                 if (update.effective_message.reply_to_message):
                     if update.effective_message.reply_to_message.text:
-                        logging.info(f"by replying to bot's text: {update.message.reply_to_message}")
-                        prompt = f'"User replied to the message :`{update.effective_message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_id={update.effective_message.reply_to_message.message_id} message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request.NOTHING MORE!"
+                        replied_text = update.message.reply_to_message.text
+                        logging.info(f"by replying to bot's text: {replied_text}")
+                        prompt = f'"User replied to the message :`{replied_text}" by the prompt: {prompt}' + f". Using these information : 'replied_message_id={update.effective_message.reply_to_message.message_id} message_thread_id={message_thread_id} and group_id={group_id}', Answer their request.NOTHING MORE!"
                     else:
                         logging.info(f"by replying to bot's non-text message: {update.message.reply_to_message} \n")
-                        prompt = f'"User replied to the message :`{update.message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'message_id={update.message.reply_to_message.message_id} message_thread_id={update.message.message_thread_id} and group_id={update.message.chat.id}', Answer their request.NOTHING MORE!"
+                        prompt = f'"User replied to the message :`{update.message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'replied_message_id={update.effective_message.reply_to_message.message_id} message_thread_id={message_thread_id} and group_id={group_id}', Answer their request.NOTHING MORE!"
                 await self.process_openai_response(update, context, prompt, chat_id,role="system",super_access=True)
                 return
             elif prompt.lower().startswith(gp_trigger_keyword.lower()) or update.message.text.lower().startswith('/chat'):
@@ -949,7 +953,7 @@ class ChatGPTTelegramBot:
                         
 
                 if (update.message.reply_to_message and update.message.reply_to_message.text):
-                    prompt = f'"{update.message.reply_to_message.text}" {prompt}'
+                    prompt = f'"{update.message.reply_to_message.text} {prompt}'
             else:
                 if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
                     logging.info('Message is a reply to the bot, allowing...')
