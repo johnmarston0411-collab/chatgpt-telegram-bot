@@ -138,7 +138,7 @@ class OpenAIHelper:
         plugins_used = ()
         response = await self.__common_get_chat_response(chat_id, role, query)
         if self.config['enable_functions'] and not self.conversations_vision[chat_id]:
-            response, plugins_used = await self.__handle_function_call(chat_id, response)
+            response, plugins_used = await self.__handle_function_call(chat_id, response,super_access=super_access)
             if is_direct_result(response):
                 return response, '0'
 
@@ -181,7 +181,7 @@ class OpenAIHelper:
         plugins_used = ()
         response = await self.__common_get_chat_response(chat_id, role, query, stream=True)
         if self.config['enable_functions'] and not self.conversations_vision[chat_id]:
-            response, plugins_used = await self.__handle_function_call(chat_id, response, stream=True)
+            response, plugins_used = await self.__handle_function_call(chat_id, response, stream=True,super_access=super_access)
             if is_direct_result(response):
                 yield response, '0'
                 return

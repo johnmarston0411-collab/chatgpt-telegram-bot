@@ -33,9 +33,6 @@ from dotenv import load_dotenv
 #load .env for OPENAI_BASE_URL
 load_dotenv()
 
-FORWARD_KEYWORD = os.getenv("FORWARD_KEYWORD",'forward it :')
-SEND_KEYWORD = os.getenv("SEND_KEYWORD",'send it :')
-CHANNEL_ID = os.getenv("CHANNEL_ID",'None')
 
 class ChatGPTTelegramBot:
     """
@@ -824,56 +821,14 @@ class ChatGPTTelegramBot:
                 parse_mode=constants.ParseMode.MARKDOWN
             )
 
-    async def send_replied_message(self , update: Update, context: ContextTypes.DEFAULT_TYPE):
-        # Get the replied message
-        replied_message = update.effective_message.reply_to_message
-        
-        # Extract text from the replied message
-        text = replied_message.text if replied_message.text else ""
-        
-        # Check if the replied message contains media
-        if replied_message.photo:
-            # If it's a photo, send the photo along with the text
-            await context.bot.send_media_group(
-                chat_id=CHANNEL_ID,
-                media=[InputMediaPhoto(media=replied_message.photo[-1].file_id, caption=text)]
-            )
-        elif replied_message.audio:
-            # If it's an audio file, send the audio along with the text
-            await context.bot.send_audio(
-                chat_id=CHANNEL_ID,
-                audio=replied_message.audio.file_id,
-                caption=text
-            )
-        elif replied_message.document:
-            # If it's a document, send the document along with the text
-            await context.bot.send_document(
-                chat_id=CHANNEL_ID,
-                document=replied_message.document.file_id,
-                caption=text
-            )
-        elif replied_message.video:
-            # If it's a video, send the video along with the text
-            await context.bot.send_video(
-                chat_id=CHANNEL_ID,
-                video=replied_message.video.file_id,
-                caption=text
-            )
-        elif replied_message.voice:
-            # If it's a voice message, send the voice message along with the text
-            await context.bot.send_voice(
-                chat_id=CHANNEL_ID,
-                voice=replied_message.voice.file_id,
-                caption=text
-            )
-        else:
-            # If there's no media, just send the text
-            await context.bot.send_message(chat_id=CHANNEL_ID, text=text)
-        
+   
     async def handle_channel_commands(self, update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, chat_id: int):
         """
         Handles channel-related commands: forwarding or sending messages based on keywords.
         """
+        
+        FORWARD_KEYWORD = os.getenv("FORWARD_KEYWORD",'forward it :')
+        CHANNEL_ID = os.getenv("CHANNEL_ID",'None')
         if prompt.lower().startswith(FORWARD_KEYWORD.lower()):
             # Extract the part of the prompt after the forward keyword and strip spaces.
             user_input_after_keyword = prompt[len(FORWARD_KEYWORD):].strip()
@@ -898,6 +853,174 @@ class ChatGPTTelegramBot:
             await self.process_openai_response(update, context, forward_response, chat_id,role="system")
 
         return
+
+
+    async def handle_moderation_request(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, chat_id: int, message_thread_id: int, group_id: int
+    ):
+        """Handles moderation requests in group chats."""
+        logging.info(
+            f"User requested for `Indirect` Group moderation with message_thread_id:{message_thread_id} and group_id={group_id}"
+        )
+        
+        # Call the common reply-checking logic.
+        # Note: process_reply_logic returns the updated prompt and a flag (handled) if processing was already done.
+        prompt, handled = await self.process_reply_logic(
+            update, context, prompt, chat_id, original_prompt=prompt, is_group=True, super_access=True
+        )
+        if handled:
+            return
+
+        # If there was no reply, remove the mod trigger keyword and add moderation info.
+        if update.effective_message.reply_to_message is None:
+            prompt = prompt[len(self.config["mod_trigger_keyword"]) :].strip()
+            logging.info(f"With the prompt: {prompt}")
+            prompt = (
+                f"User asked for :`{prompt}`. Using these information : "
+                f"`message_thread_id={message_thread_id} group_id={group_id}`, Answer their request.NOTHING MORE!"
+            )
+        else:
+            # A reply exists but process_reply_logic did not handle it.
+            reply = update.effective_message.reply_to_message
+            if reply.text:
+                logging.info(f"by replying to the text: {reply.text}")
+                prompt = (
+                    f'"User replied to the text :`{reply.text}" by the prompt: {prompt}. '
+                    f"Using these information : 'replied_message_id={reply.message_id} message_thread_id={message_thread_id} and group_id={group_id}', "
+                    f"Answer their request.NOTHING MORE!"
+                )
+            else:
+                logging.info(f"by replying to a non-text message: {reply}")
+                prompt = (
+                    f'"User replied to the message :`Non-text message" by the prompt: {prompt}. '
+                    f"Using these information : 'replied_message_id={reply.message_id} message_thread_id={message_thread_id} and group_id={group_id}', "
+                    f"Answer their request.NOTHING MORE!"
+                )
+
+        await self.process_openai_response(update, context, prompt, chat_id, role="system", super_access=True)
+        return
+
+    async def handle_group_chat_prompt(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, chat_id: int, message_thread_id: int
+    ):
+        """Handles prompts in group chats, including trigger keyword checks and reply handling."""
+        gp_trigger_keyword = self.config["group_trigger_keyword"]
+        mod_trigger_keyword = self.config["mod_trigger_keyword"]
+        FORWARD_KEYWORD = os.getenv("FORWARD_KEYWORD", "forward it :")
+
+        if prompt.lower().startswith(FORWARD_KEYWORD.lower()):
+            await self.handle_channel_commands(update, context, prompt, chat_id)
+        elif prompt.lower().startswith(mod_trigger_keyword.lower()):
+            await self.handle_moderation_request(update, context, prompt, chat_id, message_thread_id, update.effective_message.chat.id)
+        elif prompt.lower().startswith(gp_trigger_keyword.lower()) or update.effective_message.text.lower().startswith("/chat"):
+            if prompt.lower().startswith(gp_trigger_keyword.lower()):
+                prompt = prompt[len(gp_trigger_keyword) :].strip()
+                if prompt.lower().startswith(FORWARD_KEYWORD.lower()):
+                    await self.handle_channel_commands(update, context, prompt, chat_id)
+                    return
+            elif prompt.lower().startswith("/chat"):
+                prompt = prompt[len("/chat") :].strip()
+
+            # Process reply logic (if the message is a reply to another message)
+            prompt, handled = await self.process_reply_logic(update, context, prompt, chat_id, original_prompt=prompt, is_group=True)
+            if handled:
+                return
+
+            logging.info("No forwarding/reply information from another source or channel detected.")
+            await self.process_openai_response(update, context, prompt, chat_id, role="user")
+
+
+    async def process_reply_logic(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        prompt: str,
+        chat_id: int,
+        original_prompt: Optional[str] = None,
+        is_group: bool = False,
+        super_access=False
+    ) -> Tuple[Optional[str], bool]:
+        """
+        Handles reply logic for both group and private chats.
+
+        Returns a tuple:
+        - The (possibly updated) prompt (or None if response was already sent)
+        - A boolean flag indicating whether processing has been handled (and so the caller should return immediately)
+        """
+        reply = update.effective_message.reply_to_message
+        if not reply:
+            return prompt, False
+
+        # In group chats, check both text and caption; in private chats, just text.
+        reply_text = reply.text if reply.text else (reply.caption if is_group and hasattr(reply, "caption") else "")
+        if not reply_text:
+            return prompt, False
+
+        # If the reply is to the bot itself:
+        if reply.from_user and reply.from_user.id == context.bot.id:
+            logging.info(f"{'Group' if is_group else 'Private'} message is a reply to the Bot itself")
+            # Use original_prompt if provided (for private chat) or the current prompt.
+            return f'"{reply_text} {original_prompt or prompt}', False
+
+        # For group chats, if the reply comes from a forwarded source with chat details:
+        if is_group and hasattr(reply, "chat") and reply.chat.first_name and reply.chat.username:
+            logging.info(
+                f"User replied to a forwarded message from another source: "
+                f"name: {reply.chat.first_name}, username: {reply.chat.username}"
+            )
+            new_prompt = (
+                f"User replied to a forwarded Telegram message containing the text: `{reply_text}` with extra information: {reply} "
+                f"and the prompt: {prompt}. Using these information, Answer their request. NOTHING MORE!"
+            )
+            await self.process_openai_response(update, context, new_prompt, chat_id, role="system",super_access=super_access)
+            return None, True
+
+        # If the reply message includes api_kwargs (likely forwarded from a channel)
+        if hasattr(reply, "api_kwargs") and "forward_from_chat" in reply.api_kwargs:
+            forward_from = reply.api_kwargs["forward_from_chat"]
+            # forward_from might be a dict with a username or just a username string
+            channel_username = (
+                forward_from.get("username") if isinstance(forward_from, dict) and forward_from.get("username") else forward_from
+            )
+            original_message_id = reply.api_kwargs.get("forward_from_message_id", "")
+            logging.info(
+                f"User replied to a forwarded message from another channel: {channel_username} with the message id: {original_message_id}"
+            )
+            new_prompt = (
+                f"User replied to a forwarded Telegram message containing the text: `{reply_text}` with extra information: {reply} "
+                f"and the prompt: {prompt}. Using these information and the link: Telegram_link=https://t.me/{channel_username}/{original_message_id} "
+                f"(Recommended to use your tools to get more complete info), Answer their request. NOTHING MORE!"
+            )
+            await self.process_openai_response(update, context, new_prompt, chat_id, role="system", super_access=super_access)
+            return None, True
+
+        # Default: prepend the reply text to the prompt.
+        return f'"{reply_text} {original_prompt or prompt}', False
+
+
+
+
+
+    async def handle_private_chat_prompt(self, update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, chat_id: int):
+        """Handles prompts in private chats, mirroring group chat handling."""
+        original_prompt = prompt
+        mod_trigger_keyword = self.config["mod_trigger_keyword"]
+        FORWARD_KEYWORD = os.getenv("FORWARD_KEYWORD", "forward it :")
+
+        if prompt.lower().startswith(FORWARD_KEYWORD.lower()):
+            await self.handle_channel_commands(update, context, prompt, chat_id)
+        elif prompt.lower().startswith(mod_trigger_keyword.lower()):
+            await self.handle_moderation_request(update, context, prompt, chat_id, 0, chat_id)  # Using 0 as message_thread_id for private chats
+        else:
+            # Process reply logic
+            prompt, handled = await self.process_reply_logic(update, context, prompt, chat_id, original_prompt=original_prompt, is_group=False)
+            if handled:
+                return
+
+            logging.info("No forwarding/reply information from another source or channel detected.")
+            await self.process_openai_response(update, context, prompt, chat_id, role="user")
+
+
     async def prompt(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
         React to incoming messages and respond accordingly.
@@ -910,61 +1033,18 @@ class ChatGPTTelegramBot:
 
         logging.info(
             f'New message received from user {update.message.from_user.name} (id: {update.message.from_user.id})')
+
         chat_id = update.effective_chat.id
         user_id = update.message.from_user.id
         message_thread_id = update.message.message_thread_id
-        group_id = update.message.chat.id
         prompt = message_text(update.message)
         self.last_message[chat_id] = prompt
 
         if is_group_chat(update):
-            gp_trigger_keyword = self.config['group_trigger_keyword']
-            mod_trigger_keyword = self.config['mod_trigger_keyword']
-            if prompt.lower().startswith(FORWARD_KEYWORD.lower()):
-                await self.handle_channel_commands(update,context,prompt,chat_id)
-            elif prompt.lower().startswith(mod_trigger_keyword.lower()) :
-                logging.info(f"User requested for `Indirect` Group moderation with message_thread_id:{message_thread_id} and group_id={update.message.chat.id}")
-                if prompt.lower().startswith(mod_trigger_keyword.lower()) and update.message.reply_to_message == None:
-                    prompt = prompt[len(mod_trigger_keyword):].strip()
-                    logging.info(f"With the prompt:{prompt}")
-                    prompt = f"User asked for :`{prompt}`. Using these information : `message_thread_id={message_thread_id} group_id={update.message.chat.id}`, Answer their request.NOTHING MORE!"                        
-
-
-                if (update.message.reply_to_message):
-                    if update.message.reply_to_message.text:
-                        replied_text = update.message.reply_to_message.text
-                        logging.info(f"by replying to the text: {replied_text}")
-                        prompt = f'"User replied to the text :`{replied_text}" by the prompt: {prompt}' + f". Using these information : 'replied_message_id={update.message.reply_to_message.message_id} message_thread_id={message_thread_id} and group_id={group_id}', Answer their request.NOTHING MORE!"
-                if (update.effective_message.reply_to_message):
-                    if update.effective_message.reply_to_message.text:
-                        replied_text = update.message.reply_to_message.text
-                        logging.info(f"by replying to bot's text: {replied_text}")
-                        prompt = f'"User replied to the message :`{replied_text}" by the prompt: {prompt}' + f". Using these information : 'replied_message_id={update.effective_message.reply_to_message.message_id} message_thread_id={message_thread_id} and group_id={group_id}', Answer their request.NOTHING MORE!"
-                    else:
-                        logging.info(f"by replying to bot's non-text message: {update.message.reply_to_message} \n")
-                        prompt = f'"User replied to the message :`{update.message.reply_to_message.text}" by the prompt: {prompt}' + f". Using these information : 'replied_message_id={update.effective_message.reply_to_message.message_id} message_thread_id={message_thread_id} and group_id={group_id}', Answer their request.NOTHING MORE!"
-                await self.process_openai_response(update, context, prompt, chat_id,role="system",super_access=True)
-                return
-            elif prompt.lower().startswith(gp_trigger_keyword.lower()) or update.message.text.lower().startswith('/chat'):
-                if prompt.lower().startswith(gp_trigger_keyword.lower()):
-                    prompt = prompt[len(gp_trigger_keyword):].strip()
-                    if prompt.lower().startswith(FORWARD_KEYWORD.lower()) or prompt.lower().startswith(SEND_KEYWORD.lower()):
-                        await self.handle_channel_commands(update, context, prompt, chat_id)
-                        
-
-                if (update.message.reply_to_message and update.message.reply_to_message.text):
-                    prompt = f'"{update.message.reply_to_message.text} {prompt}'
-            else:
-                if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
-                    logging.info('Message is a reply to the bot, allowing...')
-                else:
-                    logging.warning('Message does not start with trigger keyword, ignoring...')
-                    return
-            await self.process_openai_response(update, context, prompt, chat_id, role="user")
+            await self.handle_group_chat_prompt(update, context, prompt, chat_id, message_thread_id)
 
         else:
-            await self.process_openai_response(update, context, prompt, chat_id, role="user",)
-
+            await self.handle_private_chat_prompt(update, context, prompt, chat_id)
     async def moderate(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
         React to incoming moderation requests and respond accordingly.
