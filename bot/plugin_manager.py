@@ -22,6 +22,7 @@ from plugins.telegram_extract import TelegramScraperPlugin
 from plugins.latex_to_image import LatexToImagePlugin
 from plugins.arxiv_extract import ArxivContentScraperPlugin
 from plugins.wikipedia_search import WikipediaSearchPlugin
+from plugins.image_gen import ImageGeneratorPlugin
 
 
 class PluginManager:
@@ -54,6 +55,7 @@ class PluginManager:
             'latex_to_image': LatexToImagePlugin,
             'arxiv_extract': ArxivContentScraperPlugin,
             'wikipedia_search': WikipediaSearchPlugin,
+            'image_gen': ImageGeneratorPlugin,
         }
         self.plugins = [plugin_mapping[plugin]() for plugin in enabled_plugins if plugin in plugin_mapping]
 

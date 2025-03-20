@@ -376,6 +376,7 @@ class OpenAIHelper:
         :return: The image URL and the image size
         """
         bot_language = self.config['bot_language']
+        flux_base_url = self.config['flux_base_url']
         try:
             # Parse the image_size string to extract width and height
             image_size_parts = self.config['image_size'].split('x')
@@ -391,7 +392,7 @@ class OpenAIHelper:
                 "prompt": prompt,
                 "width": image_width,
                 "height": image_height,
-                "steps": 20,
+                "steps": 24,
                 "n": 1,
                 "response_format": "b64_json"
             }
@@ -404,7 +405,7 @@ class OpenAIHelper:
 
             # Make the POST request
             response = requests.post(
-                "https://api.together.xyz/v1/images/generations",
+                flux_base_url,
                 headers=headers,
                 data=json.dumps(payload)
             )
