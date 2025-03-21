@@ -952,25 +952,25 @@ class ChatGPTTelegramBot:
             return prompt, False
 
         # In group chats, check both text and caption; in private chats, just text.
-        reply_text = reply.text if reply.text else (reply.caption if is_group and hasattr(reply, "caption") else "")
+        reply_text = reply.text if reply.text else (reply.caption if hasattr(reply, "caption") else "")
         if not reply_text:
             return prompt, False
 
         # If the reply is to the bot itself:
         if reply.from_user and reply.from_user.id == context.bot.id:
-            logging.info(f"{'Group' if is_group else 'Private'} message is a reply to the Bot itself")
+            logging.info(f"{'Group' if is_group else 'Private'} message:{reply} is a reply to the Bot itself")
             # Use original_prompt if provided (for private chat) or the current prompt.
-            return f'"{reply_text} {original_prompt or prompt}', False
+            return f'"{reply_text} {original_prompt or prompt} - and here is additional info:{reply}', False
 
         # For group chats, if the reply comes from a forwarded source with chat details:
-        if is_group and hasattr(reply, "chat") and reply.chat.first_name and reply.chat.username:
+        if is_group and hasattr(reply, "chat") and reply.chat.first_name and reply.chat.username and not hasattr(reply, "api_kwargs"):
             logging.info(
                 f"User replied to a forwarded message from another source: "
                 f"name: {reply.chat.first_name}, username: {reply.chat.username}"
             )
             new_prompt = (
                 f"User replied to a forwarded Telegram message containing the text: `{reply_text}` with extra information: {reply} "
-                f"and the prompt: {prompt}. Using these information, Answer their request. NOTHING MORE!"
+                f"and the prompt: {prompt}. Using these information, Answer their request EXACTLY AS THEY INSTRUCT. NOTHING MORE!"
             )
             await self.process_openai_response(update, context, new_prompt, chat_id, role="system",super_access=super_access)
             return None, True
@@ -989,7 +989,7 @@ class ChatGPTTelegramBot:
             new_prompt = (
                 f"User replied to a forwarded Telegram message containing the text: `{reply_text}` with extra information: {reply} "
                 f"and the prompt: {prompt}. Using these information and the link: Telegram_link=https://t.me/{channel_username}/{original_message_id} "
-                f"(Recommended to use your tools to get more complete info), Answer their request. NOTHING MORE!"
+                f"(Recommended to use your tools to get more complete info), Answer their request EXACTLY AS THEY INSTRUCT. NOTHING MORE!"
             )
             await self.process_openai_response(update, context, new_prompt, chat_id, role="system", super_access=super_access)
             return None, True

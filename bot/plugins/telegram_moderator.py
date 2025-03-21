@@ -60,7 +60,6 @@ class TelegramModerator(Plugin):
                         "'send_to_topic' sends a new message to the topic. **Use with caution!**"
                         "'get_recent_chats' retrieves recent chats. " 
                         "'close_topic' closes a forum topic and 'open_topic' opens a forum topic. **Use with caution!**"
-                        "'re-open_topic' re-opens a previously closed topic."
                     },
                     "message_text": {
                         "type": "string",
@@ -78,14 +77,14 @@ class TelegramModerator(Plugin):
                         "type": "integer",
                         "description": "The ID of the message to forward. Required for 'forward_to_channel' action."
                     },
-                    "media_links": {
+                    "media_links_or_file_ids": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Array of media links for sending multiple media."
+                        "description": "Array of media links/file_ids for sending multiple media."
                     },
-                    "media_link": {
+                    "media_link_or_file_id": {
                         "type": "string",
-                        "description": "Link to a single media item."
+                        "description": "Link/file_id to a single media item."
                     }
                 },
                 "required": ["action","message_text","group_id","message_thread_id","message_id"]
@@ -109,8 +108,8 @@ class TelegramModerator(Plugin):
         message_text = kwargs.get("message_text")
         message_thread_id = kwargs.get("message_thread_id")
         message_id = kwargs.get("message_id")
-        media_links = kwargs.get("media_links", [])
-        media_link = kwargs.get("media_link", "")
+        media_links_or_file_ids = kwargs.get("media_links_or_file_ids", [])
+        media_link_or_file_id = kwargs.get("media_link_or_file_id", "")
 
         # Initialize the Telegram Bot.
         bot = Bot(token=BOT_TOKEN_MODERATOR)
@@ -152,49 +151,42 @@ class TelegramModerator(Plugin):
                 await bot.close_forum_topic(chat_id=group_id, message_thread_id=message_thread_id)
                 return {"status": "success", "action": "close_topic", "details": f"Topic {message_thread_id} closed in group {group_id}"}
 
-            elif action == "re-open_topic":
-                if not message_thread_id:
-                    return {"error": "message_thread_id is required to open a topic."}
-                await bot.open_forum_topic(chat_id=group_id, message_thread_id=message_thread_id)
-                await bot.send_message(chat_id=group_id, message_thread_id=message_thread_id, text=f"{message_text} \n 🤖by Moderator bot✍🏻")
-                return {"status": "success", "action": "open_topic", "details": f"Topic {message_thread_id} opened in group {group_id}"}
-
             elif action == "send_photo_to_channel":
-                if not media_link:
-                    return {"error": "media_link is required to send a photo."}
-                await bot.send_photo(chat_id=CHANNEL_ID, photo=media_link, caption=message_text)
+                if not media_link_or_file_id:
+                    return {"error": "media_link_or_file_id is required to send a photo."}
+                await bot.send_photo(chat_id=CHANNEL_ID, photo=media_link_or_file_id, caption=message_text)
                 return {"status": "success", "action": "send_photo", "details": f"Photo sent to channel {CHANNEL_ID}"}
 
             elif action == "send_video_to_channel":
-                if not media_link:
-                    return {"error": "media_link is required to send a video."}
-                await bot.send_video(chat_id=CHANNEL_ID, video=media_link, caption=message_text)
+                if not media_link_or_file_id:
+                    return {"error": "media_link_or_file_id is required to send a video."}
+                await bot.send_video(chat_id=CHANNEL_ID, video=media_link_or_file_id, caption=message_text)
                 return {"status": "success", "action": "send_video", "details": f"Video sent to channel {CHANNEL_ID}"}
 
             elif action == "send_document_to_channel":
-                if not media_link:
-                    return {"error": "media_link is required to send a document."}
-                await bot.send_document(chat_id=CHANNEL_ID, document=media_link, caption=message_text)
+                if not media_link_or_file_id:
+                    return {"error": "media_link_or_file_id is required to send a document."}
+                await bot.send_document(chat_id=CHANNEL_ID, document=media_link_or_file_id, caption=message_text)
                 return {"status": "success", "action": "send_document", "details": f"Document sent to channel {CHANNEL_ID}"}
 
             elif action == "send_multiple_photos_to_channel":
-                if not media_links:
-                    return {"error": "media_links are required to send multiple photos."}
-                media_list = [InputMediaPhoto(media) for media in media_links]
+                if not media_links_or_file_ids:
+                    return {"error": "media_links_or_file_ids are required to send multiple photos."}
+                media_list = [InputMediaPhoto(media) for media in media_links_or_file_ids]
                 await bot.send_media_group(chat_id=CHANNEL_ID, media=media_list)
                 return {"status": "success", "action": "send_multiple_photos", "details": f"Multiple photos sent to channel {CHANNEL_ID}"}
 
             elif action == "send_multiple_videos_to_channel":
-                if not media_links:
-                    return {"error": "media_links are required to send multiple videos."}
-                media_list = [InputMediaVideo(media) for media in media_links]
+                if not media_links_or_file_ids:
+                    return {"error": "media_links_or_file_ids are required to send multiple videos."}
+                media_list = [InputMediaVideo(media) for media in media_links_or_file_ids]
                 await bot.send_media_group(chat_id=CHANNEL_ID, media=media_list)
                 return {"status": "success", "action": "send_multiple_videos", "details": f"Multiple videos sent to channel {CHANNEL_ID}"}
 
             elif action == "send_multiple_documents_to_channel":
-                if not media_links:
-                    return {"error": "media_links are required to send multiple documents."}
-                media_list = [InputMediaDocument(media) for media in media_links]
+                if not media_links_or_file_ids:
+                    return {"error": "media_links_or_file_ids are required to send multiple documents."}
+                media_list = [InputMediaDocument(media) for media in media_links_or_file_ids]
                 await bot.send_media_group(chat_id=CHANNEL_ID, media=media_list)
                 return {"status": "success", "action": "send_multiple_documents", "details": f"Multiple documents sent to channel {CHANNEL_ID}"}
 
