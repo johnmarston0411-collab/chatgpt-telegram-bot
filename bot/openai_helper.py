@@ -17,6 +17,9 @@ from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_t
 from utils import is_direct_result, encode_image, decode_image
 from plugin_manager import PluginManager
 
+#import requests for TogetherAI
+import requests
+
 # Models can be found here: https://platform.openai.com/docs/models/overview
 # Models gpt-3.5-turbo-0613 and  gpt-3.5-turbo-16k-0613 will be deprecated on June 13, 2024
 GPT_3_MODELS = ("gpt-3.5-turbo", "gpt-3.5-turbo-0301", "gpt-3.5-turbo-0613")
@@ -25,9 +28,13 @@ GPT_4_MODELS = ("gpt-4", "gpt-4-0314", "gpt-4-0613", "gpt-4-turbo-preview")
 GPT_4_32K_MODELS = ("gpt-4-32k", "gpt-4-32k-0314", "gpt-4-32k-0613")
 GPT_4_VISION_MODELS = ("gpt-4o",)
 GPT_4_128K_MODELS = ("gpt-4-1106-preview", "gpt-4-0125-preview", "gpt-4-turbo-preview", "gpt-4-turbo", "gpt-4-turbo-2024-04-09")
-GPT_4O_MODELS = ("gpt-4o", "gpt-4o-mini", "chatgpt-4o-latest")
+GPT_4O_MODELS = ("gpt-4o", "gpt-4o-mini", "gpt-4o-mini-2024-07-18", "chatgpt-4o-latest")
 O_MODELS = ("o1", "o1-mini", "o1-preview")
-GPT_ALL_MODELS = GPT_3_MODELS + GPT_3_16K_MODELS + GPT_4_MODELS + GPT_4_32K_MODELS + GPT_4_VISION_MODELS + GPT_4_128K_MODELS + GPT_4O_MODELS + O_MODELS
+
+#TogetherAI Models;Put your desired models from TogetherAI models here
+GPT_TOGETHERAI_MODELS = ("Qwen/Qwen2.5-Coder-32B-Instruct","meta-llama/Llama-3.3-70B-Instruct-Turbo")
+
+GPT_ALL_MODELS = GPT_3_MODELS + GPT_3_16K_MODELS + GPT_4_MODELS + GPT_4_32K_MODELS + GPT_4_VISION_MODELS + GPT_4_128K_MODELS + GPT_4O_MODELS + O_MODELS + GPT_TOGETHERAI_MODELS
 
 def default_max_tokens(model: str) -> int:
     """
@@ -121,7 +128,7 @@ class OpenAIHelper:
             self.reset_chat_history(chat_id)
         return len(self.conversations[chat_id]), self.__count_tokens(self.conversations[chat_id])
 
-    async def get_chat_response(self, chat_id: int, query: str) -> tuple[str, str]:
+    async def get_chat_response(self, chat_id: int,role:str, query: str , super_access=False) -> tuple[str, str]:
         """
         Gets a full response from the GPT model.
         :param chat_id: The chat ID
@@ -129,9 +136,9 @@ class OpenAIHelper:
         :return: The answer from the model and the number of tokens used
         """
         plugins_used = ()
-        response = await self.__common_get_chat_response(chat_id, query)
+        response = await self.__common_get_chat_response(chat_id, role, query)
         if self.config['enable_functions'] and not self.conversations_vision[chat_id]:
-            response, plugins_used = await self.__handle_function_call(chat_id, response)
+            response, plugins_used = await self.__handle_function_call(chat_id, response,super_access=super_access)
             if is_direct_result(response):
                 return response, '0'
 
@@ -141,13 +148,13 @@ class OpenAIHelper:
             for index, choice in enumerate(response.choices):
                 content = choice.message.content.strip()
                 if index == 0:
-                    self.__add_to_history(chat_id, role="assistant", content=content)
+                    self.__add_to_history(chat_id, role=role, content=content)
                 answer += f'{index + 1}\u20e3\n'
                 answer += content
                 answer += '\n\n'
         else:
             answer = response.choices[0].message.content.strip()
-            self.__add_to_history(chat_id, role="assistant", content=answer)
+            self.__add_to_history(chat_id, role=role, content=answer)
 
         bot_language = self.config['bot_language']
         show_plugins_used = len(plugins_used) > 0 and self.config['show_plugins_used']
@@ -164,7 +171,7 @@ class OpenAIHelper:
 
         return answer, response.usage.total_tokens
 
-    async def get_chat_response_stream(self, chat_id: int, query: str):
+    async def get_chat_response_stream(self, chat_id: int, role:str, query: str,super_access=False):
         """
         Stream response from the GPT model.
         :param chat_id: The chat ID
@@ -172,9 +179,9 @@ class OpenAIHelper:
         :return: The answer from the model and the number of tokens used, or 'not_finished'
         """
         plugins_used = ()
-        response = await self.__common_get_chat_response(chat_id, query, stream=True)
+        response = await self.__common_get_chat_response(chat_id, role, query, stream=True)
         if self.config['enable_functions'] and not self.conversations_vision[chat_id]:
-            response, plugins_used = await self.__handle_function_call(chat_id, response, stream=True)
+            response, plugins_used = await self.__handle_function_call(chat_id, response, stream=True,super_access=super_access)
             if is_direct_result(response):
                 yield response, '0'
                 return
@@ -188,7 +195,7 @@ class OpenAIHelper:
                 answer += delta.content
                 yield answer, 'not_finished'
         answer = answer.strip()
-        self.__add_to_history(chat_id, role="assistant", content=answer)
+        self.__add_to_history(chat_id, role=role, content=answer)
         tokens_used = str(self.__count_tokens(self.conversations[chat_id]))
 
         show_plugins_used = len(plugins_used) > 0 and self.config['show_plugins_used']
@@ -202,13 +209,14 @@ class OpenAIHelper:
 
         yield answer, tokens_used
 
+
     @retry(
         reraise=True,
         retry=retry_if_exception_type(openai.RateLimitError),
         wait=wait_fixed(20),
         stop=stop_after_attempt(3)
     )
-    async def __common_get_chat_response(self, chat_id: int, query: str, stream=False):
+    async def __common_get_chat_response(self, chat_id: int, role:str, query: str, stream=False):
         """
         Request a response from the GPT model.
         :param chat_id: The chat ID
@@ -222,7 +230,7 @@ class OpenAIHelper:
 
             self.last_updated[chat_id] = datetime.datetime.now()
 
-            self.__add_to_history(chat_id, role="user", content=query)
+            self.__add_to_history(chat_id, role=role, content=query)
 
             # Summarize the chat history if it's too long to avoid excessive token usage
             token_count = self.__count_tokens(self.conversations[chat_id])
@@ -269,7 +277,7 @@ class OpenAIHelper:
         except Exception as e:
             raise Exception(f"⚠️ _{localized_text('error', bot_language)}._ ⚠️\n{str(e)}") from e
 
-    async def __handle_function_call(self, chat_id, response, stream=False, times=0, plugins_used=()):
+    async def __handle_function_call(self, chat_id, response, stream=False, times=0, plugins_used=(),super_access=False):
         function_name = ''
         arguments = ''
         if stream:
@@ -300,8 +308,18 @@ class OpenAIHelper:
             else:
                 return response, plugins_used
 
-        logging.info(f'Calling function {function_name} with arguments {arguments}')
-        function_response = await self.plugin_manager.call_function(function_name, self, arguments)
+        if function_name != "telegram_moderator":
+            logging.info(f'Calling function {function_name} with arguments {arguments}')
+            function_response = await self.plugin_manager.call_function(function_name, self, arguments)
+        else:
+            if super_access:
+                    logging.info(f'! Super_Acess Call: Bot has called Telegram moderator function: `{function_name}` with arguments {arguments}')
+                    function_response = await self.plugin_manager.call_function(function_name, self, arguments)
+            else:
+                logging.info(f'The bot doesn\'t have access to built-in moderating plugin[s],aborting function call {function_name} with arguments {arguments}')
+                function_response = json.dumps({"status": "failed", "details": "You don't have access to this function. Ask the user if they want to moderate telegram ,they have to use '/moderate' command."}, default=str)
+
+
 
         if function_name not in plugins_used:
             plugins_used += (function_name,)
@@ -320,7 +338,8 @@ class OpenAIHelper:
             function_call='auto' if times < self.config['functions_max_consecutive_calls'] else 'none',
             stream=stream
         )
-        return await self.__handle_function_call(chat_id, response, stream, times + 1, plugins_used)
+        return await self.__handle_function_call(chat_id, response, stream, times + 1, plugins_used,super_access=super_access)
+
 
     async def generate_image(self, prompt: str) -> tuple[str, str]:
         """
@@ -349,6 +368,73 @@ class OpenAIHelper:
             return response.data[0].url, self.config['image_size']
         except Exception as e:
             raise Exception(f"⚠️ _{localized_text('error', bot_language)}._ ⚠️\n{str(e)}") from e
+
+    async def generate_image_flux(self, prompt: str) -> tuple[str, str]:
+        """
+        Generates an image from the given prompt using FLUX model.
+        :param prompt: The prompt to send to the model
+        :return: The image URL and the image size
+        """
+        bot_language = self.config['bot_language']
+        flux_base_url = self.config['flux_base_url']
+        try:
+            # Parse the image_size string to extract width and height
+            image_size_parts = self.config['image_size'].split('x')
+            if len(image_size_parts) == 2:
+                image_width = int(image_size_parts[0])
+                image_height = int(image_size_parts[1])
+            else:
+                raise ValueError("Invalid image_size format. Expected format: 'widthxheight'.")
+
+            # Prepare the request payload
+            payload = {
+                "model": self.config['image_model'],
+                "prompt": prompt,
+                "width": image_width,
+                "height": image_height,
+                "steps": 24,
+                "n": 1,
+                "response_format": "b64_json"
+            }
+
+            # Set the headers
+            headers = {
+                "Authorization": f"Bearer {self.config['api_key']}",
+                "Content-Type": "application/json"
+            }
+
+            # Make the POST request
+            response = requests.post(
+                flux_base_url,
+                headers=headers,
+                data=json.dumps(payload)
+            )
+
+            # Check if the request was successful
+            if response.status_code != 200:
+                logging.error(f'Error from FLUX API: {response.status_code} - {response.text}')
+                raise Exception(
+                    f"⚠️ _{localized_text('error', bot_language)}._ "
+                    f"⚠️\n{localized_text('try_again', bot_language)}."
+                )
+
+            # Parse the response JSON
+            response_data = response.json()
+            if 'data' not in response_data or len(response_data['data']) == 0:
+                logging.error(f'No data in response from FLUX: {response_data}')
+                raise Exception(
+                    f"⚠️ _{localized_text('error', bot_language)}._ "
+                    f"⚠️\n{localized_text('try_again', bot_language)}."
+                )
+
+            # Extract the b64_json data from the response
+            b64_json = response_data['data'][0]['b64_json']
+
+            # Return the b64_json data and the image size
+            return b64_json, f"{image_width}x{image_height}"
+        except Exception as e:
+            raise Exception(f"⚠️ _{localized_text('error', bot_language)}._ ⚠️\n{str(e)}") from e
+
 
     async def generate_speech(self, text: str) -> tuple[any, int]:
         """
@@ -632,6 +718,9 @@ class OpenAIHelper:
             return base * 31
         if self.config['model'] in GPT_4O_MODELS:
             return base * 31
+        #set default max tokens from Together.AI to 64,000 tk;increase if you mind!
+        if self.config['model'] in GPT_TOGETHERAI_MODELS:
+            return base * 16
         elif self.config['model'] in O_MODELS:
             # https://platform.openai.com/docs/models#o1
             if self.config['model'] == "o1":

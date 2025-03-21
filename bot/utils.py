@@ -169,7 +169,7 @@ async def is_allowed(config, update: Update, context: CallbackContext, is_inline
         for user in itertools.chain(allowed_user_ids, admin_user_ids):
             if not user.strip():
                 continue
-            if await is_user_in_group(update, context, user):
+            if await is_user_in_group(update, context, user) and config['allow_group_users']:
                 logging.info(f'{user} is a member. Allowing group chat message...')
                 return True
         logging.info(f'Group chat messages from user {name} '
@@ -330,7 +330,7 @@ def is_direct_result(response: any) -> bool:
         return response.get('direct_result', False)
 
 
-async def handle_direct_result(config, update: Update, response: any):
+async def handle_direct_result(config, update: Update, response: any,direct_caption=""):
     """
     Handles a direct result from a plugin
     """
@@ -345,6 +345,7 @@ async def handle_direct_result(config, update: Update, response: any):
     common_args = {
         'message_thread_id': get_thread_id(update),
         'reply_to_message_id': get_reply_to_message_id(config, update),
+        'caption': direct_caption,
     }
 
     if kind == 'photo':
@@ -354,7 +355,14 @@ async def handle_direct_result(config, update: Update, response: any):
             await update.effective_message.reply_photo(**common_args, photo=open(value, 'rb'))
     elif kind == 'gif' or kind == 'file':
         if format == 'url':
-            await update.effective_message.reply_document(**common_args, document=value)
+            i=1
+            if isinstance(value,list):
+                while i < len(value):
+                    await update.effective_message.reply_document(message_thread_id=common_args['message_thread_id'], document=value[i-1])
+                    i+=1
+                await update.effective_message.reply_document(**common_args, document=value[i-1])
+            else:
+                await update.effective_message.reply_document(**common_args, document=value)
         if format == 'path':
             await update.effective_message.reply_document(**common_args, document=open(value, 'rb'))
     elif kind == 'dice':

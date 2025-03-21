@@ -41,10 +41,10 @@ def main():
         'max_tokens': int(os.environ.get('MAX_TOKENS', max_tokens_default)),
         'n_choices': int(os.environ.get('N_CHOICES', 1)),
         'temperature': float(os.environ.get('TEMPERATURE', 1.0)),
-        'image_model': os.environ.get('IMAGE_MODEL', 'dall-e-2'),
+        'image_model': os.environ.get('IMAGE_MODEL', 'dall-e-3'),
         'image_quality': os.environ.get('IMAGE_QUALITY', 'standard'),
         'image_style': os.environ.get('IMAGE_STYLE', 'vivid'),
-        'image_size': os.environ.get('IMAGE_SIZE', '512x512'),
+        'image_size': os.environ.get('IMAGE_SIZE', '1024x1024'),
         'model': model,
         'enable_functions': os.environ.get('ENABLE_FUNCTIONS', str(functions_available)).lower() == 'true',
         'functions_max_consecutive_calls': int(os.environ.get('FUNCTIONS_MAX_CONSECUTIVE_CALLS', 10)),
@@ -60,6 +60,8 @@ def main():
         'vision_max_tokens': int(os.environ.get('VISION_MAX_TOKENS', '300')),
         'tts_model': os.environ.get('TTS_MODEL', 'tts-1'),
         'tts_voice': os.environ.get('TTS_VOICE', 'alloy'),
+        'flux_base_url': os.environ.get('FLUX_BASE_URL','https://api.together.xyz/v1'),
+
     }
 
     if openai_config['enable_functions'] and not functions_available:
@@ -77,6 +79,7 @@ def main():
         'token': os.environ['TELEGRAM_BOT_TOKEN'],
         'admin_user_ids': os.environ.get('ADMIN_USER_IDS', '-'),
         'allowed_user_ids': os.environ.get('ALLOWED_TELEGRAM_USER_IDS', '*'),
+        'allow_group_users': os.environ.get('ALLOW_GROUP_USERS','false').lower() == 'true',
         'enable_quoting': os.environ.get('ENABLE_QUOTING', 'true').lower() == 'true',
         'enable_image_generation': os.environ.get('ENABLE_IMAGE_GENERATION', 'true').lower() == 'true',
         'enable_transcription': os.environ.get('ENABLE_TRANSCRIPTION', 'true').lower() == 'true',
@@ -92,6 +95,7 @@ def main():
         'ignore_group_transcriptions': os.environ.get('IGNORE_GROUP_TRANSCRIPTIONS', 'true').lower() == 'true',
         'ignore_group_vision': os.environ.get('IGNORE_GROUP_VISION', 'true').lower() == 'true',
         'group_trigger_keyword': os.environ.get('GROUP_TRIGGER_KEYWORD', ''),
+        'mod_trigger_keyword': os.environ.get('MOD_TRIGGER_KEYWORD', ''),
         'token_price': float(os.environ.get('TOKEN_PRICE', 0.002)),
         'image_prices': [float(i) for i in os.environ.get('IMAGE_PRICES', "0.016,0.018,0.02").split(",")],
         'vision_token_price': float(os.environ.get('VISION_TOKEN_PRICE', '0.01')),
