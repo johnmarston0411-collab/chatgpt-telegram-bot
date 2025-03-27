@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import asyncio
 import logging
 import os
@@ -22,7 +21,6 @@ from utils import is_group_chat, get_thread_id, message_text, wrap_with_indicato
     cleanup_intermediate_files
 from openai_helper import OpenAIHelper, localized_text
 from usage_tracker import UsageTracker
-
 
 class ChatGPTTelegramBot:
     """
@@ -1043,6 +1041,26 @@ class ChatGPTTelegramBot:
         await application.bot.set_my_commands(self.group_commands, scope=BotCommandScopeAllGroupChats())
         await application.bot.set_my_commands(self.commands)
 
+    async def add_concert(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        concert = " ".join(context.args)
+        if not concert:
+            await update.message.reply_text("Пожалуйста, укажите концерт после команды.")
+            return
+        from plugins import concerts
+        response = concerts.add_concert(concert)
+        await update.message.reply_text(response)
+
+    async def list_concerts(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        from plugins import concerts
+        response = concerts.list_concerts()
+        await update.message.reply_text(response)
+
+    async def clear_concerts(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        from plugins import concerts
+        response = concerts.clear_concerts()
+        await update.message.reply_text(response)
+
+
     def run(self):
         """
         Runs the bot indefinitely until the user presses Ctrl+C
@@ -1077,6 +1095,10 @@ class ChatGPTTelegramBot:
             constants.ChatType.GROUP, constants.ChatType.SUPERGROUP, constants.ChatType.PRIVATE
         ]))
         application.add_handler(CallbackQueryHandler(self.handle_callback_inline_query))
+
+        application.add_handler(CommandHandler("addconcert", self.add_concert))
+        application.add_handler(CommandHandler("concerts", self.list_concerts))
+        application.add_handler(CommandHandler("clearconcerts", self.clear_concerts))
 
         application.add_error_handler(error_handler)
 
