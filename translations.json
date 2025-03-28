@@ -46,7 +46,8 @@
         "answer_with_chatgpt":"Answer with ChatGPT",
         "ask_chatgpt":"Ask ChatGPT",
         "loading":"Loading...",
-        "function_unavailable_in_inline_mode": "This function is unavailable in inline mode"
+        "function_unavailable_in_inline_mode": "This function is unavailable in inline mode",
+        "get_plugins": "Get active plugins and see how to use them"
     },
     "ar": {
         "help_description":"عرض رسالة المساعدة",
