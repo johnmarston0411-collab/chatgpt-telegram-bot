@@ -42,6 +42,7 @@ class PluginManager:
             'iplocation': IpLocationPlugin,
         }
         self.plugins = [plugin_mapping[plugin]() for plugin in enabled_plugins if plugin in plugin_mapping]
+        self.active_plugins_names = [plugin for plugin in enabled_plugins if plugin in plugin_mapping]
 
     def get_functions_specs(self):
         """
