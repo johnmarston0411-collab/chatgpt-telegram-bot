@@ -109,7 +109,8 @@ def main():
     # Setup and run ChatGPT and Telegram bot
     plugin_manager = PluginManager(config=plugin_config)
     openai_helper = OpenAIHelper(config=openai_config, plugin_manager=plugin_manager)
-    telegram_bot = ChatGPTTelegramBot(config=telegram_config, openai=openai_helper)
+    telegram_bot = ChatGPTTelegramBot(config=telegram_config, openai=openai_helper,
+                                      plugin_manager=plugin_manager)
     telegram_bot.run()
 
 

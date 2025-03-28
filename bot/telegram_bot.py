@@ -16,6 +16,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, \
 from pydub import AudioSegment
 from PIL import Image
 
+from bot.plugin_manager import PluginManager
 from utils import is_group_chat, get_thread_id, message_text, wrap_with_indicator, split_into_chunks, \
     edit_message_with_retry, get_stream_cutoff_values, is_allowed, get_remaining_budget, is_admin, is_within_budget, \
     get_reply_to_message_id, add_chat_request_to_usage_tracker, error_handler, is_direct_result, handle_direct_result, \
@@ -29,7 +30,7 @@ class ChatGPTTelegramBot:
     Class representing a ChatGPT Telegram Bot.
     """
 
-    def __init__(self, config: dict, openai: OpenAIHelper):
+    def __init__(self, config: dict, openai: OpenAIHelper, plugin_manager: PluginManager):
         """
         Initializes the bot with the given configuration and GPT bot object.
         :param config: A dictionary containing the bot configuration
@@ -37,9 +38,11 @@ class ChatGPTTelegramBot:
         """
         self.config = config
         self.openai = openai
+        self.plugin_manager = plugin_manager
         bot_language = self.config['bot_language']
         self.commands = [
             BotCommand(command='help', description=localized_text('help_description', bot_language)),
+            BotCommand(command='plugins', description=localized_text('get_plugins', bot_language)),
             BotCommand(command='reset', description=localized_text('reset_description', bot_language)),
             BotCommand(command='stats', description=localized_text('stats_description', bot_language)),
             BotCommand(command='resend', description=localized_text('resend_description', bot_language))
@@ -75,6 +78,24 @@ class ChatGPTTelegramBot:
                 localized_text('help_text', bot_language)[1] +
                 '\n\n' +
                 localized_text('help_text', bot_language)[2]
+        )
+        await update.message.reply_text(help_text, disable_web_page_preview=True)
+
+    async def plugins(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        Shows the active plugins menu.
+        """
+        bot_language = self.config['bot_language']
+        active_plugins = [f"{plugin}" for plugin in self.plugin_manager.plugins]
+        help_text = (
+            localized_text('Activate plugins:', bot_language) +
+            '\n\n' +
+            " ".join(active_plugins) +
+            localized_text("How to use?", bot_language) +
+            '\n\n' +
+            localized_text(
+                'plugin_name + text (e.g. youtube_audio_extractor https://www.youtube.com/watch?v=lYBUbBu4W08)',
+                bot_language)
         )
         await update.message.reply_text(help_text, disable_web_page_preview=True)
 
