@@ -86,16 +86,16 @@ class ChatGPTTelegramBot:
         Shows the active plugins menu.
         """
         bot_language = self.config['bot_language']
-        active_plugins = [f"{plugin}" for plugin in self.plugin_manager.plugins]
         help_text = (
-            localized_text('Activate plugins:', bot_language) +
-            '\n\n' +
-            " ".join(active_plugins) +
-            localized_text("How to use?", bot_language) +
-            '\n\n' +
-            localized_text(
-                'plugin_name + text (e.g. youtube_audio_extractor https://www.youtube.com/watch?v=lYBUbBu4W08)',
-                bot_language)
+                localized_text('Activate plugins:', bot_language) +
+                '\n\n' +
+                " ".join(self.plugin_manager.active_plugins_names) +
+                "\n\n" +
+                localized_text("How to use?", bot_language) +
+                '\n' +
+                localized_text(
+                    'plugin_name + text (e.g. youtube_audio_extractor https://www.youtube.com/watch?v=lYBUbBu4W08)',
+                    bot_language)
         )
         await update.message.reply_text(help_text, disable_web_page_preview=True)
 
@@ -128,14 +128,14 @@ class ChatGPTTelegramBot:
         chat_messages, chat_token_length = self.openai.get_conversation_stats(chat_id)
         remaining_budget = get_remaining_budget(self.config, self.usage, update)
         bot_language = self.config['bot_language']
-        
+
         text_current_conversation = (
             f"*{localized_text('stats_conversation', bot_language)[0]}*:\n"
             f"{chat_messages} {localized_text('stats_conversation', bot_language)[1]}\n"
             f"{chat_token_length} {localized_text('stats_conversation', bot_language)[2]}\n"
             "----------------------------\n"
         )
-        
+
         # Check if image generation is enabled and, if so, generate the image statistics for today
         text_today_images = ""
         if self.config.get('enable_image_generation', False):
@@ -148,7 +148,7 @@ class ChatGPTTelegramBot:
         text_today_tts = ""
         if self.config.get('enable_tts_generation', False):
             text_today_tts = f"{characters_today} {localized_text('stats_tts', bot_language)}\n"
-        
+
         text_today = (
             f"*{localized_text('usage_today', bot_language)}:*\n"
             f"{tokens_today} {localized_text('stats_tokens', bot_language)}\n"
@@ -160,7 +160,7 @@ class ChatGPTTelegramBot:
             f"{localized_text('stats_total', bot_language)}{current_cost['cost_today']:.2f}\n"
             "----------------------------\n"
         )
-        
+
         text_month_images = ""
         if self.config.get('enable_image_generation', False):
             text_month_images = f"{images_month} {localized_text('stats_images', bot_language)}\n"
@@ -172,7 +172,7 @@ class ChatGPTTelegramBot:
         text_month_tts = ""
         if self.config.get('enable_tts_generation', False):
             text_month_tts = f"{characters_month} {localized_text('stats_tts', bot_language)}\n"
-        
+
         # Check if image generation is enabled and, if so, generate the image statistics for the month
         text_month = (
             f"*{localized_text('usage_month', bot_language)}:*\n"
@@ -492,9 +492,9 @@ class ChatGPTTelegramBot:
                    (prompt is not None and not prompt.lower().startswith(trigger_keyword.lower())):
                     logging.info('Vision coming from group chat with wrong keyword, ignoring...')
                     return
-        
+
         image = update.message.effective_attachment[-1]
-        
+
 
         async def _execute():
             bot_language = self.config['bot_language']
@@ -513,14 +513,14 @@ class ChatGPTTelegramBot:
                     parse_mode=constants.ParseMode.MARKDOWN
                 )
                 return
-            
+
             # convert jpg from telegram to png as understood by openai
 
             temp_file_png = io.BytesIO()
 
             try:
                 original_image = Image.open(temp_file)
-                
+
                 original_image.save(temp_file_png, format='PNG')
                 logging.info(f'New vision request received from user {update.message.from_user.name} '
                              f'(id: {update.message.from_user.id})')
@@ -532,8 +532,8 @@ class ChatGPTTelegramBot:
                     reply_to_message_id=get_reply_to_message_id(self.config, update),
                     text=localized_text('media_type_fail', bot_language)
                 )
-            
-            
+
+
 
             user_id = update.message.from_user.id
             if user_id not in self.usage:
@@ -618,7 +618,7 @@ class ChatGPTTelegramBot:
                     if tokens != 'not_finished':
                         total_tokens = int(tokens)
 
-                
+
             else:
 
                 try:
