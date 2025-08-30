@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import io
 
 from uuid import uuid4
@@ -11,7 +10,7 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton, InlineQueryResu
 from telegram import InputTextMessageContent, BotCommand
 from telegram.error import RetryAfter, TimedOut, BadRequest
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, \
-    filters, InlineQueryHandler, CallbackQueryHandler, Application, ContextTypes, CallbackContext
+    filters, InlineQueryHandler, CallbackQueryHandler, Application, ContextTypes, CallbackContext, AIORateLimiter
 
 from pydub import AudioSegment
 from PIL import Image
@@ -346,11 +345,10 @@ class ChatGPTTelegramBot:
         filename = update.message.effective_attachment.file_unique_id
 
         async def _execute():
-            filename_mp3 = f'{filename}.mp3'
             bot_language = self.config['bot_language']
             try:
                 media_file = await context.bot.get_file(update.message.effective_attachment.file_id)
-                await media_file.download_to_drive(filename)
+                audio_data = io.BytesIO(await media_file.download_as_bytearray())
             except Exception as e:
                 logging.exception(e)
                 await update.effective_message.reply_text(
@@ -365,10 +363,10 @@ class ChatGPTTelegramBot:
                 return
 
             try:
-                audio_track = AudioSegment.from_file(filename)
-                audio_track.export(filename_mp3, format="mp3")
+                audio_track = AudioSegment.from_file(audio_data)
+                audio_track.export(audio_data, format="mp3")
                 logging.info(f'New transcribe request received from user {update.message.from_user.name} '
-                             f'(id: {update.message.from_user.id})')
+                             f'(id: {update.message.from_user.id}) for audio duration {audio_track.duration_seconds:.2f}s')
 
             except Exception as e:
                 logging.exception(e)
@@ -377,8 +375,6 @@ class ChatGPTTelegramBot:
                     reply_to_message_id=get_reply_to_message_id(self.config, update),
                     text=localized_text('media_type_fail', bot_language)
                 )
-                if os.path.exists(filename):
-                    os.remove(filename)
                 return
 
             user_id = update.message.from_user.id
@@ -386,7 +382,7 @@ class ChatGPTTelegramBot:
                 self.usage[user_id] = UsageTracker(user_id, update.message.from_user.name)
 
             try:
-                transcript = await self.openai.transcribe(filename_mp3)
+                transcript = await self.openai.transcribe(audio_data)
 
                 transcription_price = self.config['transcription_price']
                 self.usage[user_id].add_transcription_seconds(audio_track.duration_seconds, transcription_price)
@@ -443,11 +439,6 @@ class ChatGPTTelegramBot:
                     text=f"{localized_text('transcribe_fail', bot_language)}: {str(e)}",
                     parse_mode=constants.ParseMode.MARKDOWN
                 )
-            finally:
-                if os.path.exists(filename_mp3):
-                    os.remove(filename_mp3)
-                if os.path.exists(filename):
-                    os.remove(filename)
 
         await wrap_with_indicator(update, context, _execute, constants.ChatAction.TYPING)
 
@@ -813,8 +804,7 @@ class ChatGPTTelegramBot:
         Handle the inline query. This is run when you type: @botusername <query>
         """
         query = update.inline_query.query
-        if len(query) < 3:
-            return
+        logging.info(f'Inline query received: "{query}" (length: {len(query)}) from user {update.inline_query.from_user.name} (id: {update.inline_query.from_user.id})')
         if not await self.check_allowed_and_within_budget(update, context, is_inline=True):
             return
 
@@ -1053,6 +1043,7 @@ class ChatGPTTelegramBot:
             .get_updates_proxy_url(self.config['proxy']) \
             .post_init(self.post_init) \
             .concurrent_updates(True) \
+            .rate_limiter(AIORateLimiter()) \
             .build()
 
         application.add_handler(CommandHandler('reset', self.reset))
